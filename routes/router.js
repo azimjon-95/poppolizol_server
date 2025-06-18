@@ -19,6 +19,9 @@ const NightShiftController = require("../controller/nightShiftController");
 const materialController = require("../controller/materialContoller");
 const materialValidation = require("../validation/MaterialValidation");
 
+const normaController = require("../controller/normaController");
+const normaValidation = require("../validation/normaValidation");
+
 /**
  * ============================
  * Material Routes
@@ -32,6 +35,16 @@ router.put(
   materialController.update
 );
 router.delete("/material/delete/:id", materialController.delete);
+
+/**
+ * ============================
+ * Norma Routes
+ * ============================
+ */
+router.post("/norma/create", normaValidation, normaController.createNorma);
+router.get("/norma/all", normaController.getNorma);
+router.put("/norma/update/:id", normaValidation, normaController.updateNorma);
+router.delete("/norma/delete/:id", normaController.deleteNorma);
 
 /**
  * ============================
