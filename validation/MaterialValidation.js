@@ -25,6 +25,9 @@ const materialValidation = (req, res, next) => {
         type: "number",
         minimum: 0,
       },
+      category: {
+        type: "string",
+      },
     },
     required: ["name", "unit", "quantity", "currency", "price"],
     additionalProperties: false,
@@ -35,6 +38,7 @@ const materialValidation = (req, res, next) => {
         quantity: "Material miqdori kiritilishi shart",
         currency: "Valyuta turi kiritilishi shart",
         price: "Material narxi kiritilishi shart",
+        category: "Material kategoryasini tanlang",
       },
       properties: {
         name: "Material nomi 2 dan 50 gacha belgidan iborat bo'lishi kerak",
@@ -42,6 +46,7 @@ const materialValidation = (req, res, next) => {
         quantity: "Material miqdori musbat son bo'lishi kerak",
         currency: "Valyuta turi 'sum' yoki 'dollar' bo'lishi kerak",
         price: "Material narxi musbat son bo'lishi kerak",
+        category: "Material kategoryasini tanlang",
       },
       additionalProperties: "Ruxsat etilmagan maydon kiritildi",
     },

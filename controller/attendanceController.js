@@ -1,10 +1,10 @@
 const Attendance = require("../model/attendanceModal");
 const Admin = require("../model/adminModel");
-const Clinic = require("../model/clinicInfo");
+const Factory = require("../model/factoryModel");
 const response = require("../utils/response");
 
 class AttendanceController {
-    // Default attendance settings (since removed from ClinicInfo)
+    // Default attendance settings
     static attendanceSettings = {
         grace_period_minutes: 15,
         early_leave_threshold_minutes: 30,
@@ -13,24 +13,16 @@ class AttendanceController {
 
     // Utility to get work schedule
     static async getWorkSchedule() {
-        const clinic = await Clinic.findOne();
-        if (!clinic) {
-            throw new Error("Klinika topilmadi");
+        const factory = await Factory.findOne();
+        if (!factory) {
+            throw new Error("Zavod topilmadi");
         }
 
         return {
-            start_time: clinic.work_schedule.start_time,
-            end_time: clinic.work_schedule.end_time,
-            work_days: clinic.work_schedule.work_days,
+            start_time: factory.workingHours.startTime,
+            end_time: factory.workingHours.endTime,
             settings: this.attendanceSettings,
         };
-    }
-
-    // Check if today is a work day
-    static isWorkDay(workDays) {
-        const today = new Date();
-        const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-        return workDays.includes(dayNames[today.getDay()]);
     }
 
     // Parse time string (e.g., "08:00") to Date object for a given date
@@ -50,16 +42,12 @@ class AttendanceController {
                 return response.notFound(res, "Ishchi topilmadi");
             }
 
-            const clinic = await Clinic.findOne();
-            if (!clinic) {
-                return response.error(res, "Klinika topilmadi");
+            const factory = await Factory.findOne();
+            if (!factory) {
+                return response.error(res, "Zavod topilmadi");
             }
 
             const schedule = await this.getWorkSchedule();
-            if (!this.isWorkDay(schedule.work_days)) {
-                return response.error(res, "Bugun ish kuni emas");
-            }
-
             const today = new Date().toISOString().split("T")[0];
             const checkInTime = new Date();
 
@@ -181,9 +169,9 @@ class AttendanceController {
                 return response.notFound(res, "Ishchi topilmadi");
             }
 
-            const clinic = await Clinic.findOne();
-            if (!clinic) {
-                return response.error(res, "Klinika topilmadi");
+            const factory = await Factory.findOne();
+            if (!factory) {
+                return response.error(res, "Zavod topilmadi");
             }
 
             const today = new Date().toISOString().split("T")[0];

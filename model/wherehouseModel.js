@@ -9,7 +9,7 @@ const MaterialSchema = new mongoose.Schema(
     },
     unit: {
       type: String,
-      enum: ["kilo", "dona", "metr"],
+      enum: ["kilo", "dona", "metr", "litr", "gram"],
       required: true,
     },
     quantity: {
@@ -17,20 +17,15 @@ const MaterialSchema = new mongoose.Schema(
       min: 0,
       required: true,
     },
-    currency: {
-      type: String,
-      enum: ["sum", "dollar"],
-      required: true,
-    },
     price: {
       type: Number,
       required: true,
     },
-    // supplier: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "Customers",
-    //   required: true,
-    // },
+    category: {
+      type: String,
+      trim: true,
+      default: "Others"
+    }
   },
   { timestamps: true }
 );

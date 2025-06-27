@@ -1,83 +1,99 @@
 const mongoose = require("mongoose");
-const AdminSchema = new mongoose.Schema(
+
+const EmployeeSchema = new mongoose.Schema(
   {
     firstName: {
       type: String,
-      required: true,
+      required: [true, "Ism kiritilishi shart"],
       trim: true,
+    },
+    middleName: {
+      type: String,
+      trim: true,
+      default: "",
     },
     lastName: {
       type: String,
-      required: true,
+      required: [true, "Familya kiritilishi shart"],
       trim: true,
     },
-    address: {
+    department: {
       type: String,
-      required: true,
+      required: [true, "Bo'lim kiritilishi shart"],
+      enum: [
+        "ishlab_chiqarish",
+        "sifat_nazorati",
+        "ombor",
+        "buxgalteriya",
+        "elektrik",
+        "transport",
+        "xavfsizlik",
+        "tozalash",
+        "oshxona",
+      ],
+      default: "ishlab_chiqarish",
+    },
+    position: {
+      type: String,
+      required: [true, "Lavozim kiritilishi shart"],
       trim: true,
     },
-    login: {
+    experience: {
       type: String,
-      required: true,
-      unique: true,
       trim: true,
-    },
-    password: {
-      type: String,
-      required: true,
-      minlength: 6,
-    },
-    role: {
-      type: String,
-      default: "director",
-      enum: ["reception", "director", "doctor", "nurse", "cleaner"],
-    },
-    permissions: {
-      type: [String],
-      default: [],
-    },
-    salary_per_month: {
-      type: Number,
-      default: 0,
-    },
-    specialization: {
-      type: String,
       default: "",
+    },
+    passportSeries: {
+      type: String,
+      required: [true, "Pasport seriyasi kiritilishi shart"],
+      trim: true,
+      unique: true,
+      match: [/^[A-Z]{2}\d{7}$/, "Pasport seriyasi formati noto'g'ri"],
     },
     phone: {
       type: String,
-      required: true,
-    },
-    roomId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Room",
-    },
-    birthday: {
-      type: Date,
-    },
-    salary_type: {
-      type: String,
-      default: "fixed",
-      enum: ["fixed", "percentage"],
-    },
-    percentage_from_admissions: {
-      type: Number,
-      default: 0,
-    },
-    servicesId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Services",
-    },
-    // for attendance
-    idCardNumber: {
-      type: String,
-      unique: true,
+      required: [true, "Telefon raqami kiritilishi shart"],
       trim: true,
+      match: [/^\+998\d{9}$/, "Telefon raqami formati noto'g'ri"],
+    },
+    address: {
+      type: String,
+      required: [true, "Manzil kiritilishi shart"],
+      trim: true,
+    },
+    paymentType: {
+      type: String,
+      required: [true, "To'lov turi kiritilishi shart"],
+      enum: ["oylik", "kunlik", "soatlik"],
+      default: "oylik",
+    },
+    salary: {
+      type: Number,
+      required: [true, "Maosh kiritilishi shart"],
+      min: [0, "Maosh manfiy bo'lishi mumkin emas"],
+    },
+    isOfficeWorker: {
+      type: Boolean,
+      default: false,
+    },
+    login: {
+      type: String,
+      trim: true
+    },
+    password: {
+      type: String,
+      trim: true,
+    },
+    role: {
+      type: String,
+      default: "",
     },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Admins", AdminSchema);
+
+
+module.exports = mongoose.model("Admins", EmployeeSchema);
 
 

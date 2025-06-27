@@ -1,125 +1,169 @@
 const Ajv = require("ajv");
-const ajv = new Ajv({ allErrors: true });
+const ajv = new Ajv({ allErrors: true, verbose: true });
 require("ajv-errors")(ajv);
 require("ajv-formats")(ajv);
 const response = require("../utils/response");
 
-const adminValidation = (req, res, next) => {
+const employeeValidation = (req, res, next) => {
   const schema = {
     type: "object",
     properties: {
-      firstName: { type: "string", minLength: 2, maxLength: 50 },
-      lastName: { type: "string", minLength: 2, maxLength: 50 },
-      address: { type: "string", minLength: 2, maxLength: 100 },
-      login: {
+      firstName: {
         type: "string",
-        minLength: 4,
-        maxLength: 20,
-        pattern: "^[a-zA-Z0-9]+$",
+        minLength: 2,
+        maxLength: 50,
+        errorMessage: "Ism 2-50 ta belgi oralig‘ida bo‘lishi kerak",
       },
-      password: { type: "string", minLength: 6, maxLength: 50 },
-      role: {
+      middleName: {
         type: "string",
-        enum: ["reception", "director", "doctor", "nurse", "cleaner"],
+        maxLength: 50,
+        errorMessage: "Otasining ismi 50 ta belgi oralig‘ida bo‘lishi kerak",
       },
-      permissions: {
-        type: "array",
-        items: { type: "string" },
-        uniqueItems: true,
-      },
-      salary_per_month: {
-        type: "number",
-        minimum: 0,
-      },
-      specialization: {
+      lastName: {
         type: "string",
+        minLength: 2,
+        maxLength: 50,
+        errorMessage: "Familya 2-50 ta belgi oralig‘ida bo‘lishi kerak",
+      },
+      department: {
+        type: "string",
+        enum: [
+          "ishlab_chiqarish",
+          "sifat_nazorati",
+          "ombor",
+          "buxgalteriya",
+          "elektrik",
+          "transport",
+          "xavfsizlik",
+          "tozalash",
+          "oshxona",
+        ],
+        errorMessage: "Bo‘lim noto‘g‘ri (mavjud bo‘limlardan birini tanlang)",
+      },
+      position: {
+        type: "string",
+        minLength: 2,
+        maxLength: 100,
+        errorMessage: "Lavozim 2-100 ta belgi oralig‘ida bo‘lishi kerak",
+      },
+      experience: {
+        type: "string",
+        maxLength: 50,
+        errorMessage: "Ish staji 50 ta belgi oralig‘ida bo‘lishi kerak",
+      },
+      passportSeries: {
+        type: "string",
+        pattern: "^[A-Z]{2}\\d{7}$",
+        errorMessage: "Pasport seriyasi formati noto‘g‘ri (masalan, AA1234567)",
       },
       phone: {
         type: "string",
-        minLength: 7,
-        maxLength: 15,
+        pattern: "^\\+998\\d{9}$",
+        errorMessage: "Telefon raqami formati noto‘g‘ri (masalan, +998901234567)",
       },
-      roomId: {
+      address: {
         type: "string",
-        pattern: "^[0-9a-fA-F]{24}$",
+        minLength: 2,
+        maxLength: 100,
+        errorMessage: "Manzil 2-100 ta belgi oralig‘ida bo‘lishi kerak",
       },
-      servicesId: {
+      paymentType: {
         type: "string",
-        pattern: "^[0-9a-fA-F]{24}$",
+        enum: ["oylik", "kunlik", "soatlik"],
+        errorMessage: "To‘lov turi noto‘g‘ri (oylik, kunlik, soatlik)",
       },
-      birthday: {
-        type: "string",
-        format: "date",
-      },
-      salary_type: {
-        type: "string",
-        enum: ["fixed", "percentage"],
-      },
-      percentage_from_admissions: {
+      salary: {
         type: "number",
         minimum: 0,
+        errorMessage: "Maosh 0 dan katta yoki teng son bo‘lishi kerak",
       },
-      idCardNumber: {
+      isOfficeWorker: {
+        type: "boolean",
+        errorMessage: "Ofis xodimi holati boolean bo‘lishi kerak",
+      },
+      login: {
         type: "string",
       },
-      admission_price: {
-        type: "number",
-        minimum: 0,
+      password: {
+        type: "string",
+      },
+      role: {
+        type: "string",
+        enum: ["", "admin", "manager", "specialist", "warehouse", "accountant"],
+        errorMessage:
+          "Rol noto‘g‘ri (admin, manager, specialist, warehouse, accountant yoki bo‘sh)",
       },
     },
     required: [
       "firstName",
       "lastName",
-      "address",
-      "login",
-      "password",
+      "department",
+      "position",
+      "passportSeries",
       "phone",
+      "address",
+      "paymentType",
+      "salary",
     ],
+    if: { properties: { isOfficeWorker: { const: true } } },
+    then: {
+      properties: {
+        login: {
+          type: "string",
+          minLength: 4,
+          maxLength: 20,
+          pattern: "^[a-zA-Z0-9]+$",
+          errorMessage: "Login 4-20 ta belgidan iborat, faqat harflar va raqamlar",
+        },
+        password: {
+          type: "string",
+          minLength: 6,
+          maxLength: 50,
+          errorMessage: "Parol 6-50 ta belgi oralig‘ida bo‘lishi kerak",
+        },
+        role: {
+          type: "string",
+          enum: ["", "admin", "manager", "specialist", "warehouse", "accountant"],
+          errorMessage:
+            "Rol noto‘g‘ri (admin, manager, specialist, warehouse, accountant yoki bo‘sh)",
+        },
+      },
+    },
+    else: {
+      properties: {
+        login: { type: "string", const: "" },
+        password: { type: "string", const: "" },
+        role: { type: "string", const: "" },
+      },
+    },
     additionalProperties: false,
     errorMessage: {
       required: {
         firstName: "Ism kiritish shart",
-        lastName: "Familiya kiritish shart",
-        address: "Manzil kiritish shart",
-        login: "Login kiritish shart",
-        password: "Parol kiritish shart",
+        lastName: "Familya kiritish shart",
+        department: "Bo‘lim kiritish shart",
+        position: "Lavozim kiritish shart",
+        passportSeries: "Pasport seriyasi kiritish shart",
         phone: "Telefon raqam kiritish shart",
-      },
-      properties: {
-        firstName: "Ism 2-50 ta belgi oralig‘ida bo‘lishi kerak",
-        lastName: "Familiya 2-50 ta belgi oralig‘ida bo‘lishi kerak",
-        address: "Manzil 2-100 ta belgi oralig‘ida bo‘lishi kerak",
-        login: "Login 4-20 ta belgidan iborat, faqat harflar va raqamlar",
-        password: "Parol 6-50 ta belgi oralig‘ida bo‘lishi kerak",
-        role: "Rol noto‘g‘ri (faqat 'reception', 'director', 'doctor', 'nurse', 'cleaner')",
-        permissions:
-          "Ruxsatlar ro‘yxati takrorlanmaydigan stringlardan iborat bo‘lishi kerak",
-        salary_per_month: "Oylik maosh 0 dan katta yoki teng son bo‘lishi kerak",
-        specialization: "Yo‘nalish noto‘g‘ri",
-        phone: "Telefon raqam 7-15 ta belgi oralig‘ida bo‘lishi kerak",
-        servicesId: "Services ID noto‘g‘ri (24 ta belgi ObjectId formatida)",
-        birthday: "Tug‘ilgan sana noto‘g‘ri formatda (YYYY-MM-DD)",
-        salary_type: "Maosh turi noto‘g‘ri (fixed yoki percentage)",
-        percentage_from_admissions: "Foiz 0 dan katta yoki teng son bo‘lishi kerak",
-        idCardNumber: "ID karta raqami noto‘g‘ri",
-        admission_price: "Qabul narxi 0 dan katta yoki teng son bo‘lishi kerak",
-        roomId: "Xonalar ro‘yxati takrorlanmaydigan stringlardan iborat bo‘lishi kerak",
+        address: "Manzil kiritish shart",
+        paymentType: "To‘lov turi kiritish shart",
+        salary: "Maosh kiritish shart",
       },
       additionalProperties: "Ruxsat etilmagan maydon kiritildi",
     },
   };
 
   const validate = ajv.compile(schema);
-  const result = validate(req.body);
+  const valid = validate(req.body);
 
-  if (!result) {
-    const errorField =
-      validate.errors[0].instancePath.replace("/", "") || "Umumiy";
-    const errorMessage = validate.errors[0].message;
-    return response.error(res, `${errorField} xato: ${errorMessage}`);
+  if (!valid) {
+    const error = validate.errors[0];
+    const errorField = error.instancePath.replace("/", "") || "Umumiy";
+    const errorMessage = error.message || error.params.message;
+    return response.error(res, `${errorField}: ${errorMessage}`);
   }
 
   next();
 };
 
-module.exports = adminValidation;
+module.exports = employeeValidation;
