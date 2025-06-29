@@ -59,7 +59,8 @@ const employeeValidation = (req, res, next) => {
       phone: {
         type: "string",
         pattern: "^\\+998\\d{9}$",
-        errorMessage: "Telefon raqami formati noto‘g‘ri (masalan, +998901234567)",
+        errorMessage:
+          "Telefon raqami formati noto‘g‘ri (masalan, +998901234567)",
       },
       address: {
         type: "string",
@@ -89,7 +90,14 @@ const employeeValidation = (req, res, next) => {
       },
       role: {
         type: "string",
-        enum: ["", "admin", "manager", "specialist", "warehouse", "accountant"],
+        enum: [
+          "director",
+          "admin",
+          "manager",
+          "specialist",
+          "warehouse",
+          "accountant",
+        ],
         errorMessage:
           "Rol noto‘g‘ri (admin, manager, specialist, warehouse, accountant yoki bo‘sh)",
       },
@@ -113,7 +121,8 @@ const employeeValidation = (req, res, next) => {
           minLength: 4,
           maxLength: 20,
           pattern: "^[a-zA-Z0-9]+$",
-          errorMessage: "Login 4-20 ta belgidan iborat, faqat harflar va raqamlar",
+          errorMessage:
+            "Login 4-20 ta belgidan iborat, faqat harflar va raqamlar",
         },
         password: {
           type: "string",
@@ -123,7 +132,14 @@ const employeeValidation = (req, res, next) => {
         },
         role: {
           type: "string",
-          enum: ["", "admin", "manager", "specialist", "warehouse", "accountant"],
+          enum: [
+            "director",
+            "admin",
+            "manager",
+            "specialist",
+            "warehouse",
+            "accountant",
+          ],
           errorMessage:
             "Rol noto‘g‘ri (admin, manager, specialist, warehouse, accountant yoki bo‘sh)",
         },
