@@ -63,6 +63,7 @@ router.delete("/norma/delete/:id", normaController.deleteNorma);
 router.get("/finished-products", productionSystem.finishedProducts);
 router.get("/production-history", productionSystem.productionHistory);
 router.post("/production-process", productionSystem.productionProcess);
+router.post("/production/bn5", productionSystem.createBn5Production);
 
 /**
  * ============================

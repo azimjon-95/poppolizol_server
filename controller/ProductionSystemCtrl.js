@@ -2,6 +2,7 @@ const Material = require('../model/wherehouseModel');
 const ProductNorma = require('../model/productNormaSchema');
 const FinishedProduct = require('../model/finishedProductModel');
 const ProductionHistory = require('../model/ProductionHistoryModel');
+const HistoryProduction = require('../model/HistoryProductionModel');
 const response = require('../utils/response');
 const mongoose = require("mongoose");
 
@@ -135,6 +136,110 @@ class ProductionSystem {
         } catch (error) {
             await session.abortTransaction();
             return response.error(res, "Production process failed", error.message);
+        } finally {
+            session.endSession();
+        }
+    }
+
+
+    async createBn5Production(req, res) {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const {
+                date,
+                bn3Amount,
+                wasteAmount,
+                gasAmount,
+                temperature,
+                electricEnergy,
+                boilingHours,
+                electricity,
+                extra,
+                price,
+                notes,
+            } = req.body;
+
+            // Validate required fields
+            if (!date || !bn3Amount || !wasteAmount || !price) {
+                await session.abortTransaction();
+                session.endSession();
+                return response.error(res, "Missing required fields: date, bn3Amount, wasteAmount, and price are mandatory");
+            }
+
+            const finalBn5 = bn3Amount - wasteAmount;
+            const unitCost = Number(price);
+
+            if (isNaN(unitCost) || unitCost <= 0) {
+                await session.abortTransaction();
+                session.endSession();
+                return response.error(res, "Invalid price value");
+            }
+
+            if (finalBn5 < 0) {
+                await session.abortTransaction();
+                session.endSession();
+                return response.error(res, "Final BN-5 quantity cannot be negative");
+            }
+
+            // Check BN-3 availability
+            const bn3Material = await Material.findOne({ category: 'BN-3' }).session(session);
+            if (!bn3Material || bn3Material.quantity < bn3Amount) {
+                await session.abortTransaction();
+                session.endSession();
+                return response.error(res, `Insufficient BN-3. Required: ${bn3Amount}, Available: ${bn3Material?.quantity || 0}`);
+            }
+
+            // Update or create BN-5 material
+            let bn5Material = await Material.findOne({ category: 'BN-5' }).session(session);
+            if (bn5Material) {
+                const oldQuantity = bn5Material.quantity;
+                const oldPrice = Number(bn5Material.price) || 0;
+                const totalQuantity = oldQuantity + finalBn5;
+                const weightedAveragePrice = ((oldQuantity * oldPrice) + (finalBn5 * unitCost)) / totalQuantity;
+
+                bn5Material.quantity = totalQuantity;
+                bn5Material.price = weightedAveragePrice;
+                await bn5Material.save({ session });
+            } else {
+                bn5Material = await Material.create([{
+                    name: 'BN-5',
+                    quantity: finalBn5,
+                    price: unitCost,
+                    currency: 'sum',
+                    unit: 'kilo',
+                    category: 'BN-5',
+                }], { session });
+                bn5Material = bn5Material[0];
+            }
+
+            // Deduct BN-3 quantity
+            bn3Material.quantity -= bn3Amount;
+            await bn3Material.save({ session });
+
+            // Record production history
+            await HistoryProduction.create([{
+                date,
+                bn3Amount,
+                wasteAmount,
+                finalBn5,
+                gasAmount,
+                temperature,
+                electricEnergy,
+                boilingHours,
+                electricity,
+                extra,
+                price: unitCost,
+                notes,
+            }], { session });
+
+            await session.commitTransaction();
+            return response.created(res, `Successfully produced ${finalBn5} units of BN-5`, { finalBn5, price: unitCost });
+
+        } catch (error) {
+            await session.abortTransaction();
+            return response.serverError(res, "Failed to produce BN-5", error.message);
         } finally {
             session.endSession();
         }
