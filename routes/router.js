@@ -10,6 +10,7 @@ const productionSystem = require("../controller/ProductionSystemCtrl");
 const factoryController = require("../controller/factoryConfigCtrl");
 const ExpenseController = require('../controller/expensesController');
 const SalaryService = require('../controller/SalaryCtrl');
+const SaleController = require('../controller/saleCartController'); // Path to your SaleController
 // Validations
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
@@ -64,6 +65,8 @@ router.get("/finished-products", productionSystem.finishedProducts);
 router.get("/production-history", productionSystem.productionHistory);
 router.post("/production-process", productionSystem.productionProcess);
 router.post("/production/bn5", productionSystem.createBn5Production);
+router.post("/production/salesBN5", productionSystem.productionForSalesBN5);
+router.get("/inventory", productionSystem.getInventory);
 
 /**
  * ============================
@@ -112,6 +115,21 @@ router.post('/penalty', SalaryService.addPenalty);
 router.get('/report/:month/:year', SalaryService.getMonthlySalaryReport);
 router.get('/penalties/:employeeId/:month/:year', SalaryService.getEmployeePenalties);
 router.post('/overpayment', SalaryService.handleOverpayment);
+
+
+
+/**
+ * ============================
+ * Salar Cart Routes
+ * ============================
+ */
+router.post('/sales', SaleController.createSale);
+router.get('/sales/:id', SaleController.getSaleById);
+router.put('/sales/:id', SaleController.updateSale);
+router.delete('/sales/:id', SaleController.deleteSale);
+router.patch('/sales/:id/delivered', SaleController.markAsDelivered);
+router.post('/sales/:id/pay-debt', SaleController.payDebt);
+
 
 
 module.exports = router;

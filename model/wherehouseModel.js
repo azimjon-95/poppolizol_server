@@ -33,3 +33,5 @@ const MaterialSchema = new mongoose.Schema(
 const Material = mongoose.model("materials", MaterialSchema);
 
 module.exports = Material;
+
+

@@ -16,6 +16,7 @@ class MaterialController {
 
   async create(req, res) {
     try {
+      console.log(req.body);
       const material = await Material.create(req.body);
       if (!material) {
         return response.notFound(res, "Material qo'shilmadi");

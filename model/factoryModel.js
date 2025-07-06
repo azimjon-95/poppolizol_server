@@ -11,6 +11,12 @@ const factorySchema = new mongoose.Schema({
   },
   electricityPrice: { type: Number, required: true },
   methaneGasPrice: { type: Number, required: true },
+
+  telegramApiUrl: {
+    botToken: { type: String, required: true },
+    chatId: { type: String, required: true }
+  },
+  nds: { type: Number, required: true },
   bitumenMarkFive: {
     costPrice: { type: Number, required: true },
     profitMargin: { type: Number, required: true }
@@ -24,3 +30,5 @@ const factorySchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('Factory', factorySchema);
+
+

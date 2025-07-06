@@ -2,6 +2,8 @@
 const Material = require("../model/wherehouseModel");
 const Firm = require("../model/firmModel");
 const Income = require("../model/Income");
+const FinishedProduct = require('../model/finishedProductModel');
+
 const Response = require("../utils/response");
 
 class MaterialService {
@@ -134,10 +136,17 @@ class MaterialService {
     async getFilteredMaterials(req, res) {
         try {
             const filteredMaterials = await Material.find({
-                category: { $in: ["BN-3", "BN-5", "Mel"] },
+                category: { $in: ["BN-3", "BN-5", "Mel", "ip", "kraf", "qop"] },
             });
 
-            res.status(200).json(filteredMaterials);
+            const bn = await FinishedProduct.find({
+                productName: { $in: ["Qop", "Stakan kichik", "Stakan katta"] },
+            });
+            const data = {
+                bn,
+                filteredMaterials
+            }
+            res.status(200).json(data);
         } catch (error) {
             console.error("Materiallarni olishda xatolik:", error);
             res.status(500).json({ message: "Serverda xatolik yuz berdi" });

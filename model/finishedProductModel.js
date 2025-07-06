@@ -33,6 +33,11 @@ const FinishedProductSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    sellingPrice: { // Sotuv narxi
+        type: Number,
+        required: true,
+        min: 0,
+    },
 }, { timestamps: true });
 
 const FinishedProduct = mongoose.model("FinishedProducts", FinishedProductSchema);
