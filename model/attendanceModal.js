@@ -1,50 +1,43 @@
 // models/Attendance.js
 const mongoose = require("mongoose");
 
-const AttendanceSchema = new mongoose.Schema({
-    employee_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Admins",
-        required: true
-    },
-    date: {
-        type: Date,
-        required: true,
-        default: () => new Date().toISOString().split('T')[0] // Faqat sana
-    },
-    check_in_time: {
-        type: Date,
-        required: true
-    },
-    check_out_time: {
-        type: Date,
-        default: null
-    },
-    late_minutes: {
-        type: Number,
-        default: 0
-    },
-    early_leave_minutes: {
-        type: Number,
-        default: 0
-    },
-    overtime_minutes: {
-        type: Number,
-        default: 0
-    },
-    total_work_minutes: {
-        type: Number,
-        default: 0
-    },
-    status: {
-        type: String,
-        enum: ['present', 'late', 'early_leave', 'overtime'],
-        default: 'present'
-    }
-}, { timestamps: true });
+const attendanceSchema = new mongoose.Schema({
+  employee: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Admins",
+    required: true,
+  },
+  date: {
+    type: Date,
+    required: true,
+  },
+  workType: {
+    type: String,
+    enum: [
+      "full_day", // 1.0
+      "half_day", // 0.5
+      "third_day", // 0.33
+      "three_quarter", // 0.75
+      "one_and_half", // 1.5
+      "two_days", // 2.0
+    ],
+    required: true,
+  },
+  percentage: {
+    type: Number,
+    required: true,
+    enum: [0.33, 0.5, 0.75, 1, 1.5, 2],
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  department: {
+    type: String,
+    required: true, // yoki false, agar ba'zan bo‘lmasligi mumkin
+  },
+});
 
-// Har bir ishchi uchun kunlik bitta record
-AttendanceSchema.index({ employee_id: 1, date: 1 }, { unique: true });
+attendanceSchema.index({ employee: 1, date: 1 }, { unique: true });
 
-const Attendance = mongoose.model("Attendance", AttendanceSchema);
-module.exports = Attendance;
+module.exports = mongoose.model("Attendance", attendanceSchema);
