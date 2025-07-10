@@ -10,6 +10,7 @@ const productionSystem = require("../controller/ProductionSystemCtrl");
 const factoryController = require("../controller/factoryConfigCtrl");
 const ExpenseController = require('../controller/expensesController');
 const SalaryService = require('../controller/SalaryCtrl');
+const SalesController = require('../controller/planSalerController');
 const SaleController = require('../controller/saleCartController'); // Path to your SaleController
 // Validations
 const adminValidation = require("../validation/adminValidation");
@@ -127,9 +128,26 @@ router.post('/sales', SaleController.createSale);
 router.get('/sales/:id', SaleController.getSaleById);
 router.put('/sales/:id', SaleController.updateSale);
 router.delete('/sales/:id', SaleController.deleteSale);
-router.patch('/sales/:id/delivered', SaleController.markAsDelivered);
 router.post('/sales/:id/pay-debt', SaleController.payDebt);
+router.get('/filtered', SaleController.getFilteredSales);
+router.post('/sales/:id/return', SaleController.returnItems);
+router.get('/sales/customer', SaleController.getCustomerSales);
+router.get('/sales/customerall', SaleController.getCustomers);
+router.get('/sales/customer/:customerId/completed', SaleController.getCustomerCompletedSales);
+router.get('/sales/customer/:customerId/active', SaleController.getCustomerActiveSales);
 
 
+
+/**
+ * ============================
+ * Plan Salas Routes
+ * ============================
+ */
+router.get('/sales-employees', SalesController.getSalesEmployees);
+router.post('/plans', SalesController.createPlan);
+router.get('/plans', SalesController.getAllPlans);
+router.get('/plans/:id', SalesController.getPlanById);
+router.put('/plans/:id', SalesController.updatePlan);
+router.delete('/plans/:id', SalesController.deletePlan);
 
 module.exports = router;

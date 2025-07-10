@@ -1,20 +1,21 @@
 const mongoose = require('mongoose');
 
+const customerSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    type: { type: String, enum: ['individual', 'company'], default: 'individual' },
+    phone: { type: String },
+    companyAddress: { type: String },
+    company: { type: String },
+}, { timestamps: true });
+
+
 const saleSchema = new mongoose.Schema({
     date: { type: String, required: true, default: () => new Date().toLocaleDateString('uz-UZ') },
     time: { type: String, required: true, default: () => new Date().toLocaleTimeString('uz-UZ') },
-    customer: {
-        name: { type: String, default: '' },
-        type: { type: String, enum: ['individual', 'company'], default: 'individual' },
-        phone: { type: String, default: '' },
-        companyName: { type: String, default: '' },
-        companyAddress: { type: String, default: '' },
-        taxId: { type: String, default: '' },
-        company: { type: String, default: '' },
-    },
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true }, // bog'langan customer
+
     transport: { type: String, default: '' },
     items: [{
-        productId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'Product' },
         productName: { type: String, required: true },
         category: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 },
@@ -38,6 +39,7 @@ const saleSchema = new mongoose.Schema({
         paymentDescription: { type: String, default: '' },
         discountReason: { type: String, default: '' },
         paymentType: { type: String, enum: ['naqt', 'bank'], default: 'naqt' }, // New field for initial payment type
+        isActive: { type: Boolean, default: true },
         paymentHistory: [{
             amount: { type: Number, required: true },
             date: { type: Date, default: Date.now },
@@ -49,11 +51,21 @@ const saleSchema = new mongoose.Schema({
     salesperson: { type: String, required: true },
     salerId: { type: mongoose.Schema.Types.ObjectId, required: true },
     isContract: { type: Boolean, default: true },
-    isDelivered: { type: Boolean, default: false },
     deliveryDate: { type: Date, default: null },
 }, {
     timestamps: true,
 });
-const Salecart = mongoose.model('Salecart', saleSchema);
 
-module.exports = Salecart;
+
+saleSchema.pre('save', function (next) {
+    if (this.payment.debt === 0) {
+        this.payment.isActive = false;
+    }
+    next();
+});
+const Salecart = mongoose.model('Salecart', saleSchema);
+const Customer = mongoose.model('Customer', customerSchema);
+
+module.exports = { Salecart, Customer };
+
+

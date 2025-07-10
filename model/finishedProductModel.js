@@ -38,7 +38,32 @@ const FinishedProductSchema = new mongoose.Schema({
         required: true,
         min: 0,
     },
+
+    isReturned: {
+        type: Boolean,
+        default: false,
+    },
+
+    returnInfo: {
+        returnReason: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        returnDescription: {
+            type: String,
+            trim: true,
+            default: '',
+        },
+        returnDate: {
+            type: Date,
+            default: null,
+        },
+    },
+
 }, { timestamps: true });
 
 const FinishedProduct = mongoose.model("FinishedProducts", FinishedProductSchema);
 module.exports = FinishedProduct;
+
+

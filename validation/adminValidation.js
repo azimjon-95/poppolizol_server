@@ -36,6 +36,7 @@ const employeeValidation = (req, res, next) => {
           "transport",
           "xavfsizlik",
           "tozalash",
+          "Sotuvchi",
           "oshxona",
         ],
         errorMessage: "Bo‘lim noto‘g‘ri (mavjud bo‘limlardan birini tanlang)",
@@ -97,6 +98,7 @@ const employeeValidation = (req, res, next) => {
           "specialist",
           "warehouse",
           "accountant",
+          "saler",
         ],
         errorMessage:
           "Rol noto‘g‘ri (admin, manager, specialist, warehouse, accountant yoki bo‘sh)",
@@ -111,7 +113,6 @@ const employeeValidation = (req, res, next) => {
       "phone",
       "address",
       "paymentType",
-      "salary",
     ],
     if: { properties: { isOfficeWorker: { const: true } } },
     then: {
@@ -139,6 +140,7 @@ const employeeValidation = (req, res, next) => {
             "specialist",
             "warehouse",
             "accountant",
+            "saler",
           ],
           errorMessage:
             "Rol noto‘g‘ri (admin, manager, specialist, warehouse, accountant yoki bo‘sh)",

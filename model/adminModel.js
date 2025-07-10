@@ -30,6 +30,7 @@ const EmployeeSchema = new mongoose.Schema(
         "xavfsizlik",
         "tozalash",
         "oshxona",
+        "Sotuvchi",
       ],
       default: "ishlab_chiqarish",
     },
@@ -88,6 +89,12 @@ const EmployeeSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    plans: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Plan",
+      },
+    ],
   },
   { timestamps: true }
 );
