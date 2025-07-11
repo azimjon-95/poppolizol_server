@@ -35,6 +35,7 @@ const saleSchema = new mongoose.Schema({
         totalAmount: { type: Number, required: true },
         paidAmount: { type: Number, default: 0 },
         debt: { type: Number, required: true },
+        ndsTotal: { type: Number, required: true },
         status: { type: String, enum: ['paid', 'partial'], default: 'partial' },
         paymentDescription: { type: String, default: '' },
         discountReason: { type: String, default: '' },

@@ -142,7 +142,7 @@ router.post('/sales/:id/pay-debt', SaleController.payDebt);
 router.get('/filtered', SaleController.getFilteredSales);
 router.post('/sales/:id/return', SaleController.returnItems);
 router.get('/sales/customer', SaleController.getCustomerSales);
-router.get('/sales/customerall', SaleController.getCustomers);
+router.get('/companys', SaleController.getCompanys);
 router.get('/sales/customer/:customerId/completed', SaleController.getCustomerCompletedSales);
 router.get('/sales/customer/:customerId/active', SaleController.getCustomerActiveSales);
 

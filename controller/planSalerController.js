@@ -7,7 +7,7 @@ class SalesController {
     // Get all sales employees
     async getSalesEmployees(req, res) {
         try {
-            const salesEmployees = await Employee.find({ role: 'saler' })
+            const salesEmployees = await Employee.find({ role: { $in: ['saler', 'saler_meneger'] } })
                 .select('firstName lastName department position phone')
                 .lean();
 
@@ -31,10 +31,10 @@ class SalesController {
                 return response.error(res, "Barcha maydonlar to'ldirilishi shart");
             }
 
-            // Verify employee exists and is a saler
+            // Verify employee exists and is either 'saler' or 'saler_meneger'
             const employee = await Employee.findOne({
                 _id: employeeId,
-                role: 'saler'
+                role: { $in: ['saler', 'saler_meneger'] }
             }).session(session);
 
             if (!employee) {

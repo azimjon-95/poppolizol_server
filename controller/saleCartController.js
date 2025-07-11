@@ -63,7 +63,7 @@ class SaleController {
                 await customer.save({ session });
             }
 
-            // Get current month for plan
+            // Get current month for plan based on current date
             const currentDate = new Date();
             const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
 
@@ -107,22 +107,22 @@ class SaleController {
                 deliveryDate: req.body.deliveryDate || null
             });
 
-            // Calculate total sale amount
-            const totalSaleAmount = items.reduce((sum, item) => sum + (item.discountedPrice * item.quantity), 0);
-
             // Update balance if there's a payment
             if (payment.paidAmount > 0) {
                 const balanceField = payment.paymentType === 'naqt' ? 'cash' : 'bankTransfer';
                 await Balance.updateBalance(balanceField, 'kirim', payment.paidAmount, { session });
+
+                // Update plan based on paid amount
+                plan.achievedAmount += payment.paidAmount;
+                plan.progress = Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100);
+                await plan.save({ session });
             }
 
             // Save sale
             const savedSale = await newSale.save({ session });
 
-            // Update plan
+            // Add sale to plan's sales array
             plan.sales.push(savedSale._id);
-            plan.achievedAmount += totalSaleAmount;
-            plan.progress = Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100);
             await plan.save({ session });
 
             await session.commitTransaction();
@@ -178,6 +178,24 @@ class SaleController {
                 return response.notFound(res, 'Sotuv topilmadi!');
             }
 
+            // Calculate original sale amount
+            const originalSaleAmount = existingSale.items.reduce((sum, item) => sum + (item.discountedPrice * item.quantity), 0);
+
+            // Get current month for plan
+            const currentDate = new Date(existingSale.createdAt); // Use sale's creation date
+            const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+
+            // Find plan for current month
+            const plan = await Plan.findOne({
+                employeeId: existingSale.salerId,
+                month
+            }).session(session);
+
+            if (!plan) {
+                await session.abortTransaction();
+                return response.notFound(res, `Sotuvchi uchun ${month} oyida plan topilmadi`);
+            }
+
             // Handle customer update if provided
             if (saleData.customer) {
                 let customer = await Customer.findOne({
@@ -201,7 +219,9 @@ class SaleController {
             }
 
             // Handle items update
+            let newSaleAmount = originalSaleAmount;
             if (saleData.items) {
+                // Restore original product quantities
                 for (const item of existingSale.items) {
                     const product = await FinishedProduct.findById(item._id).session(session);
                     if (product) {
@@ -210,6 +230,7 @@ class SaleController {
                     }
                 }
 
+                // Validate and deduct new quantities
                 for (const item of saleData.items) {
                     const product = await FinishedProduct.findById(item._id).session(session);
                     if (!product) {
@@ -223,6 +244,9 @@ class SaleController {
                     product.quantity -= item.quantity;
                     await product.save({ session });
                 }
+
+                // Calculate new sale amount
+                newSaleAmount = saleData.items.reduce((sum, item) => sum + (item.discountedPrice * item.quantity), 0);
             }
 
             // Handle payment update
@@ -246,6 +270,13 @@ class SaleController {
                 }
             }
 
+            // Update plan
+            const amountDifference = newSaleAmount - originalSaleAmount;
+            plan.achievedAmount = Math.max(0, plan.achievedAmount + amountDifference);
+            plan.progress = plan.targetAmount > 0 ? Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100) : 0;
+            await plan.save({ session });
+
+            // Update sale
             const sale = await Salecart.findByIdAndUpdate(
                 req.params.id,
                 { $set: saleData },
@@ -279,6 +310,31 @@ class SaleController {
                 return response.notFound(res, 'Sotuv topilmadi!');
             }
 
+            // Calculate total sale amount
+            const totalSaleAmount = sale.items.reduce((sum, item) => sum + (item.discountedPrice * item.quantity), 0);
+
+            // Get current month for plan
+            const currentDate = new Date(sale.createdAt); // Use sale's creation date to ensure correct month
+            const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+
+            // Find plan for current month
+            const plan = await Plan.findOne({
+                employeeId: sale.salerId,
+                month
+            }).session(session);
+
+            if (!plan) {
+                await session.abortTransaction();
+                return response.notFound(res, `Sotuvchi uchun ${month} oyida plan topilmadi`);
+            }
+
+            // Remove sale from plan and update achievedAmount
+            plan.sales = plan.sales.filter(saleId => saleId.toString() !== sale._id.toString());
+            plan.achievedAmount = Math.max(0, plan.achievedAmount - totalSaleAmount);
+            plan.progress = plan.targetAmount > 0 ? Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100) : 0;
+            await plan.save({ session });
+
+            // Restore product quantities
             for (const item of sale.items) {
                 const product = await FinishedProduct.findById(item._id).session(session);
                 if (product) {
@@ -287,11 +343,13 @@ class SaleController {
                 }
             }
 
+            // Update balance if there was a payment
             if (sale.payment.paidAmount > 0) {
                 const balanceField = sale.payment.paymentType === 'naqt' ? 'cash' : 'bankTransfer';
                 await Balance.updateBalance(balanceField, 'chiqim', sale.payment.paidAmount, { session });
             }
 
+            // Delete sale and related expenses
             await Salecart.deleteOne({ _id: req.params.id }).session(session);
             await Expense.deleteMany({ relatedId: req.params.id }).session(session);
 
@@ -334,9 +392,26 @@ class SaleController {
                 return response.error(res, 'To‘lov summasi yakuniy summadan oshib ketdi!');
             }
 
+            // Get the month for the plan based on the sale's createdAt date
+            const currentDate = new Date(sale.createdAt);
+            const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+
+            // Find plan for the sale's month
+            const plan = await Plan.findOne({
+                employeeId: sale.salerId,
+                month
+            }).session(session);
+
+            if (!plan) {
+                await session.abortTransaction();
+                return response.notFound(res, `Sotuvchi uchun ${month} oyida plan topilmadi`);
+            }
+
+            // Update balance
             const balanceField = paymentType === 'naqt' ? 'cash' : 'bankTransfer';
             await Balance.updateBalance(balanceField, 'kirim', amount, { session });
 
+            // Update sale payment details
             const updatedSale = await Salecart.findByIdAndUpdate(
                 req.params.id,
                 {
@@ -358,6 +433,12 @@ class SaleController {
                 { new: true, runValidators: true }
             ).session(session);
 
+            // Update plan based on payment amount
+            plan.achievedAmount += amount;
+            plan.progress = Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100);
+            await plan.save({ session });
+
+            // Create expense record
             const expense = new Expense({
                 relatedId: sale._id.toString(),
                 type: 'kirim',
@@ -385,9 +466,10 @@ class SaleController {
     }
 
     //get customers all
-    async getCustomers(req, res) {
+    async getCompanys(req, res) {
         try {
             const customers = await Customer.find();
+            console.log(customers);
             return response.success(res, 'Mijozlar muvaffaqiyatli o‘qildi!', customers);
         } catch (error) {
             return response.serverError(res, 'Mijozlarni o‘qishda xatolik!', error.message);
@@ -504,7 +586,9 @@ class SaleController {
 
             const sales = await Salecart.find({
                 createdAt: { $gte: startDate, $lte: endDate }
-            }).sort({ createdAt: -1 });
+            })
+                .populate('customerId') // Populate the customerId field with Customer data
+                .sort({ createdAt: -1 });
 
             if (!sales.length) {
                 return response.success(res, "Ko‘rsatilgan oyning faol savdolari topilmadi", []);
@@ -516,7 +600,7 @@ class SaleController {
             console.error('Error in getFilteredSales:', err);
             return response.serverError(res, "Server xatosi", err.message);
         }
-    };
+    }
 
     // Process product returns
     async returnItems(req, res) {
