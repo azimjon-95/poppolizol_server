@@ -23,6 +23,7 @@ const EmployeeSchema = new mongoose.Schema(
       enum: [
         "ishlab_chiqarish",
         "sifat_nazorati",
+        "saler_meneger",
         "ombor",
         "buxgalteriya",
         "elektrik",
@@ -65,7 +66,7 @@ const EmployeeSchema = new mongoose.Schema(
     paymentType: {
       type: String,
       required: [true, "To'lov turi kiritilishi shart"],
-      enum: ["oylik", "kunlik", "soatlik"],
+      enum: ["oylik", "kunlik", "soatlik", "ishbay"],
       default: "oylik",
     },
     salary: {
@@ -79,7 +80,7 @@ const EmployeeSchema = new mongoose.Schema(
     },
     login: {
       type: String,
-      trim: true
+      trim: true,
     },
     password: {
       type: String,
@@ -95,12 +96,17 @@ const EmployeeSchema = new mongoose.Schema(
         ref: "Plan",
       },
     ],
+    unit: {
+      type: String,
+      enum: ["polizol", "rubiroid", "ochisleniya", "boshqa"],
+      default: "boshqa",
+    },
+    unitHeadPassword: {
+      type: String,
+      trim: true,
+    },
   },
   { timestamps: true }
 );
 
-
-
 module.exports = mongoose.model("Admins", EmployeeSchema);
-
-
