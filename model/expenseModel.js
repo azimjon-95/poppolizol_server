@@ -12,7 +12,7 @@ const expenseSchema = new mongoose.Schema({
   paymentMethod: {
     type: String,
     required: true,
-    enum: ['paymentMethod', 'naqt', 'bank', 'dollar']
+    enum: ['paymentMethod', 'naqt', 'bank']
   },
   category: {
     type: String,
@@ -38,4 +38,6 @@ const expenseSchema = new mongoose.Schema({
 
 const Expense = mongoose.model('Expense', expenseSchema);
 module.exports = Expense;
+
+
 

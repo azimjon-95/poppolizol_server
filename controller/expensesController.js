@@ -17,9 +17,8 @@ class ExpenseController {
 
       // Map payment methods from Expense to Balance
       const paymentMethodMap = {
-        naqt: 'cash',
-        bank: 'bankTransfer',
-        dollar: 'dollarTransfer'
+        naqt: 'naqt',
+        bank: 'bank',
       };
       const mappedPaymentMethod = paymentMethodMap[paymentMethod];
       if (!mappedPaymentMethod) {
@@ -76,9 +75,8 @@ class ExpenseController {
 
       // Map payment methods from Expense to Balance
       const paymentMethodMap = {
-        naqt: 'cash',
-        bank: 'bankTransfer',
-        dollar: 'dollarTransfer'
+        naqt: 'naqt',
+        bank: 'bank'
       };
       const mappedPaymentMethod = paymentMethodMap[paymentMethod];
       if (paymentMethod && !mappedPaymentMethod) {
@@ -130,9 +128,8 @@ class ExpenseController {
 
       // Map payment methods from Expense to Balance
       const paymentMethodMap = {
-        naqt: 'cash',
-        bank: 'bankTransfer',
-        dollar: 'dollarTransfer'
+        naqt: 'naqt',
+        bank: 'bank',
       };
       const mappedPaymentMethod = paymentMethodMap[expense.paymentMethod];
       if (!mappedPaymentMethod) {

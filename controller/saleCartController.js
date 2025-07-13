@@ -109,7 +109,7 @@ class SaleController {
 
             // Update balance if there's a payment
             if (payment.paidAmount > 0) {
-                const balanceField = payment.paymentType === 'naqt' ? 'cash' : 'bankTransfer';
+                const balanceField = payment.paymentType === 'naqt' ? 'naqt' : 'bank';
                 await Balance.updateBalance(balanceField, 'kirim', payment.paidAmount, { session });
 
                 // Update plan based on paid amount
@@ -261,11 +261,11 @@ class SaleController {
                 }
 
                 if (existingSale.payment.paidAmount > 0) {
-                    const oldBalanceField = existingSale.payment.paymentType === 'naqt' ? 'cash' : 'bankTransfer';
+                    const oldBalanceField = existingSale.payment.paymentType === 'naqt' ? 'naqt' : 'bank';
                     await Balance.updateBalance(oldBalanceField, 'chiqim', existingSale.payment.paidAmount, { session });
                 }
                 if (saleData.payment.paidAmount > 0) {
-                    const newBalanceField = saleData.payment.paymentType === 'naqt' ? 'cash' : 'bankTransfer';
+                    const newBalanceField = saleData.payment.paymentType === 'naqt' ? 'naqt' : 'bank';
                     await Balance.updateBalance(newBalanceField, 'kirim', saleData.payment.paidAmount, { session });
                 }
             }
@@ -345,7 +345,7 @@ class SaleController {
 
             // Update balance if there was a payment
             if (sale.payment.paidAmount > 0) {
-                const balanceField = sale.payment.paymentType === 'naqt' ? 'cash' : 'bankTransfer';
+                const balanceField = sale.payment.paymentType === 'naqt' ? 'naqt' : 'bank';
                 await Balance.updateBalance(balanceField, 'chiqim', sale.payment.paidAmount, { session });
             }
 
@@ -408,7 +408,7 @@ class SaleController {
             }
 
             // Update balance
-            const balanceField = paymentType === 'naqt' ? 'cash' : 'bankTransfer';
+            const balanceField = paymentType === 'naqt' ? 'naqt' : 'bank';
             await Balance.updateBalance(balanceField, 'kirim', amount, { session });
 
             // Update sale payment details
@@ -659,7 +659,7 @@ class SaleController {
                 await newProduct.save({ session });
             }
 
-            const balanceField = paymentType === 'naqt' ? 'cash' : 'bankTransfer';
+            const balanceField = paymentType === 'naqt' ? 'naqt' : 'bank';
             await Balance.updateBalance(balanceField, 'chiqim', totalRefund, { session });
 
             const expense = new Expense({

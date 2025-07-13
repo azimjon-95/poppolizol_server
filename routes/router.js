@@ -45,6 +45,9 @@ router.post("/material/incomes", materialService.handleNewIncome);
 router.post("/material/firms", materialService.createFirm);
 router.get("/material/firms", materialService.getFirms);
 router.get("/material/getincomes", materialService.getIncomes);
+
+// Route to handle debt payment
+router.post('/material/paydebtincome', materialService.payDebtIncom);
 router.get(
     "/material/filtered-materials",
     materialService.getFilteredMaterials

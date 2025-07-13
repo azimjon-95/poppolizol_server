@@ -2,28 +2,48 @@
 const Material = require("../model/wherehouseModel");
 const Firm = require("../model/firmModel");
 const Income = require("../model/Income");
+const Balance = require("../model/balance");
+const Expense = require("../model/expenseModel");
 const FinishedProduct = require('../model/finishedProductModel');
+const moment = require("moment")
+const mongoose = require("mongoose");
 
-const Response = require("../utils/response");
+const response = require("../utils/response");
 
 class MaterialService {
+
     async handleNewIncome(req, res) {
         try {
-            const { firm: firmData, materials: materialsList, paidAmount } = req.body;
+            const {
+                firm: firmData,
+                materials: materialsList,
+                price,
+                paymentType,
+                vatPercentage,
+                totalTransportCost,
+                totalWithVat,
+                totalWithoutVat,
+                totalWorkerCost,
+                vatAmount,
+                workerPayments,
+                debtPayment // New field for optional initial debt payment
+            } = req.body;
 
             // Validation
             if (!firmData?.name || !Array.isArray(materialsList) || materialsList.length === 0) {
-                return Response.error(res, "Firma va materiallar to‘liq kiritilishi kerak");
+                return response.error(res, "Firma va materiallar to‘liq kiritilishi kerak");
             }
 
-            // Find or create firm
-            let firm = await Firm.findOne({ name: firmData.name }).lean();
-            if (!firm) {
-                firm = await Firm.create(firmData);
-            }
+            // Prepare firm data (embedded object, no separate Firm model)
+            const firm = {
+                name: firmData.name,
+                phone: firmData.phone || null,
+                address: firmData.address || null,
+            };
 
+            // Prepare materials for income
             const incomeMaterials = [];
-            let totalAmount = 0;
+            let calculatedTotalWithoutVat = 0;
 
             // Bulk operations for materials
             const materialUpdates = [];
@@ -31,18 +51,23 @@ class MaterialService {
 
             for (const item of materialsList) {
                 if (!item.name || !item.quantity || !item.price || !item.currency || !item.unit) {
-                    return Response.error(res, "Material ma'lumotlari to‘liq emas");
+                    return response.error(res, "Material ma'lumotlari to‘liq emas");
                 }
 
-                totalAmount += item.price * item.quantity;
+                calculatedTotalWithoutVat += item.price * item.quantity;
+
                 incomeMaterials.push({
-                    material: null, // Will be updated after material creation/update
-                    quantity: item.quantity,
-                    price: item.price,
+                    category: item.category || null,
                     currency: item.currency,
-                    category: item.category,
+                    name: item.name,
+                    price: item.price,
+                    quantity: item.quantity,
+                    transportCostPerUnit: item.transportCostPerUnit || 0,
+                    unit: item.unit,
+                    workerCostPerUnit: item.workerCostPerUnit || 0,
                 });
 
+                // Material model handling
                 const existingMaterial = await Material.findOne({ name: item.name }).lean();
                 if (existingMaterial) {
                     const totalQty = existingMaterial.quantity + item.quantity;
@@ -63,77 +88,247 @@ class MaterialService {
                         quantity: item.quantity,
                         price: item.price,
                         currency: item.currency,
-                        category: item.category,
+                        category: item.category || null,
                     });
                 }
             }
 
-            // Execute bulk operations
+            // Execute bulk operations for materials
             if (materialUpdates.length > 0) {
                 await Material.bulkWrite(materialUpdates);
             }
             if (newMaterials.length > 0) {
                 const createdMaterials = await Material.insertMany(newMaterials);
-                // Update incomeMaterials with new material IDs
                 createdMaterials.forEach((material, index) => {
                     incomeMaterials.find((im) => im.material === null).material = material._id;
                 });
             }
 
+            // Validate workerPayments if provided
+            if (workerPayments && Array.isArray(workerPayments)) {
+                for (const payment of workerPayments) {
+                    if (!payment.workerId || !payment.payment) {
+                        return response.error(res, "Ishchi to‘lovlari ma'lumotlari to‘liq emas");
+                    }
+                }
+            }
+
+            // Calculate VAT and totals if not provided
+            const finalVatPercentage = vatPercentage || 0;
+            const finalVatAmount = vatAmount || (calculatedTotalWithoutVat * finalVatPercentage) / 100;
+            const finalTotalWithVat = totalWithVat || calculatedTotalWithoutVat + finalVatAmount;
+            const finalTotalWithoutVat = totalWithoutVat || calculatedTotalWithoutVat;
+            const finalTotalTransportCost = totalTransportCost || materialsList.reduce((sum, item) => sum + (item.transportCostPerUnit || 0) * item.quantity, 0);
+            const finalTotalWorkerCost = totalWorkerCost || materialsList.reduce((sum, item) => sum + (item.workerCostPerUnit || 0) * item.quantity, 0);
+            const finalPrice = price || 0;
+
+            // Initialize debt fields
+            const debt = {
+                initialAmount: finalTotalWithVat, // Total amount including VAT
+                remainingAmount: finalTotalWithVat - finalPrice, // Remaining after initial payment
+                status: finalTotalWithVat - finalPrice <= 0 ? 'fully_paid' : finalPrice > 0 ? 'partially_paid' : 'pending',
+                debtPayments: []
+            };
+
+            // Handle initial debt payment if provided
+            if (debtPayment && debtPayment.amount && debtPayment.paymentMethod) {
+                if (!['naqt', 'bank'].includes(debtPayment.paymentMethod)) {
+                    return response.error(res, "Noto‘g‘ri to‘lov usuli");
+                }
+                if (debtPayment.amount > debt.remainingAmount) {
+                    return response.error(res, "To‘lov summasi qolgan qarzdan oshib ketdi");
+                }
+                debt.debtPayments.push({
+                    amount: debtPayment.amount,
+                    paymentMethod: debtPayment.paymentMethod,
+                    note: debtPayment.note || '',
+                    paymentDate: new Date()
+                });
+                debt.remainingAmount -= debtPayment.amount;
+                debt.status = debt.remainingAmount === 0 ? 'fully_paid' : 'partially_paid';
+            }
+
             // Create income record
             const income = await Income.create({
-                firm: firm._id,
+                firm,
                 materials: incomeMaterials,
-                totalAmount,
-                paidAmount,
+                price: finalPrice,
+                paymentType: paymentType || null,
+                vatPercentage: finalVatPercentage,
+                totalTransportCost: finalTotalTransportCost,
+                totalWithVat: finalTotalWithVat,
+                totalWithoutVat: finalTotalWithoutVat,
+                totalWorkerCost: finalTotalWorkerCost,
+                vatAmount: finalVatAmount,
+                workerPayments: workerPayments || [],
+                debt, // Include debt object
+                date: new Date(),
             });
 
-            return Response.created(res, "Kirim muvaffaqiyatli qo‘shildi", income);
+            return response.created(res, "Kirim muvaffaqiyatli qo‘shildi", income);
         } catch (error) {
             console.error("handleNewIncome xatolik:", error);
-            return Response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
+            return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
         }
     }
 
-    //Firm create
+
     async createFirm(req, res) {
         try {
             const existingFirm = await Firm.findOne({ name: req.body.name });
             if (existingFirm) {
-                return Response.error(res, "Firma allaqachon mavjud");
+                return response.error(res, "Firma allaqachon mavjud");
             }
 
             const firm = await Firm.create(req.body);
-            return Response.created(res, "Firma muvaffaqiyatli qo‘shildi", firm);
+            return response.created(res, "Firma muvaffaqiyatli qo‘shildi", firm);
         } catch (error) {
-            return Response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
+            return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
         }
     }
     // Get Firms
     async getFirms(req, res) {
         try {
             const firms = await Firm.find();
-            return Response.success(res, "Firmalar muvaffaqiyatli o'qildi", firms);
+            return response.success(res, "Firmalar muvaffaqiyatli o'qildi", firms);
         } catch (error) {
-            return Response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
+            return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
         }
     }
 
     //Income
     async getIncomes(req, res) {
         try {
-            const incomes = await Income.find()
-                .populate("firm")
-                .populate("materials.material");
-            return Response.success(res, "Kirimlar muvaffaqiyatli o'qildi", incomes);
+            const { month } = req.query;
+            if (!month || !/^\d{2}\.\d{4}$/.test(month)) {
+                return response.error(res, "Noto‘g‘ri yoki yetishmayotgan 'month' parametri (MM.YYYY)");
+            }
+
+            const startDate = moment(month, 'MM.YYYY').startOf('month').toDate();
+            const endDate = moment(month, 'MM.YYYY').endOf('month').toDate();
+
+
+            const incomes = await Income.find({
+                createdAt: { $gte: startDate, $lte: endDate }
+            })
+                .populate('workerPayments.workerId')
+                .sort({ createdAt: -1 });
+            // .populate('materials.material')
+
+            return response.success(res, "Kirimlar muvaffaqiyatli o'qildi", incomes);
         } catch (error) {
-            return Response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
+            return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
         }
     }
 
 
+    // Tuzatilgan payDebtIncom funksiyasi - Alternativ yondashuv
+    async payDebtIncom(req, res) {
+        const session = await mongoose.startSession();
+
+        try {
+            // Manual transaction management
+            await session.startTransaction();
+
+            const transactionResult = await (async () => {
+                const { incomeId, debtPayment } = req.body;
+
+                // Validate input
+                if (!incomeId || !debtPayment?.amount || !debtPayment?.paymentMethod) {
+                    throw new Error('Barcha majburiy maydonlar (incomeId, amount, paymentMethod) to\'ldirilishi kerak');
+                }
+
+                // Validate payment method
+                const validPaymentMethods = ['naqt', 'bank'];
+                if (!validPaymentMethods.includes(debtPayment.paymentMethod)) {
+                    throw new Error(`Noto'g'ri to'lov usuli: ${debtPayment.paymentMethod}`);
+                }
+
+                // Fetch income first
+                const income = await Income.findById(incomeId).session(session);
+                if (!income) {
+                    throw new Error('Kirim topilmadi');
+                }
+
+                // Check debt and remaining amount
+                const remainingDebt = income.debt?.remainingAmount ?? (income.totalWithVat || income.totalWithoutVat);
+                if (!income.debt || remainingDebt <= 0) {
+                    throw new Error('Qarz mavjud emas yoki u allaqachon to\'liq to\'langan');
+                }
+
+                if (debtPayment.amount > remainingDebt) {
+                    throw new Error(`To'lov summasi (${debtPayment.amount}) qoldiq qarzdan (${remainingDebt}) oshib ketdi`);
+                }
+
+                // Fetch balance after income validation
+                const balance = await Balance.findOne().session(session);
+                if (!balance || balance[debtPayment.paymentMethod] < debtPayment.amount) {
+                    throw new Error(`${debtPayment.paymentMethod}da yetarli mablag' yo'q`);
+                }
+
+                // Create debt payment record
+                const newDebtPayment = {
+                    amount: debtPayment.amount,
+                    paymentMethod: debtPayment.paymentMethod,
+                    note: debtPayment.note || '',
+                    paymentDate: new Date(),
+                };
+
+                // Update income debt
+                if (!income.debt.initialAmount) {
+                    income.debt.initialAmount = income.totalWithVat || income.totalWithoutVat;
+                }
+                income.debt.debtPayments = income.debt.debtPayments || [];
+                income.debt.debtPayments.push(newDebtPayment);
+                income.debt.remainingAmount = remainingDebt - debtPayment.amount;
+                income.debt.status = income.debt.remainingAmount === 0 ? 'fully_paid' : 'partially_paid';
+                income.price = (income.price || 0) + debtPayment.amount;
+
+                // Create expense record
+                const expense = new Expense({
+                    relatedId: incomeId,
+                    type: 'chiqim',
+                    paymentMethod: debtPayment.paymentMethod,
+                    category: 'Qarz to\'lovi',
+                    amount: debtPayment.amount,
+                    description: `Kirim material uchun qarz to'lovi - ${income.firm?.name || 'Noma\'lum firma'}`,
+                    date: new Date(),
+                });
+
+                // Update balance
+                await Balance.updateBalance(debtPayment.paymentMethod, 'chiqim', debtPayment.amount, session);
+
+                // Save all changes within the transaction
+                await income.save({ session });
+                await expense.save({ session });
+
+                // Return the data for response
+                return {
+                    income,
+                    expense,
+                    paymentDetails: newDebtPayment,
+                };
+            })();
+
+            // Commit transaction if all operations succeeded
+            await session.commitTransaction();
+
+            // If we reach here, transaction was successful
+            return response.success(res, 'Qarz to\'lovi muvaffaqiyatli amalga oshirildi', transactionResult);
+
+        } catch (error) {
+            // Abort transaction on error
+            await session.abortTransaction();
+            console.error('payDebtIncom xatosi:', error);
+            return response.serverError(res, 'Serverda xatolik yuz berdi', { error: error.message });
+        } finally {
+            await session.endSession();
+        }
+    }
+
     // Filterlangan materiallar uchun route
     async getFilteredMaterials(req, res) {
+
         try {
             const filteredMaterials = await Material.find({
                 category: { $in: ["BN-3", "BN-5", "Mel", "ip", "kraf", "qop"] },

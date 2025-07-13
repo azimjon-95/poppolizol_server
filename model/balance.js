@@ -1,74 +1,78 @@
 const mongoose = require('mongoose');
 
 const balanceSchema = new mongoose.Schema({
-    cash: {
+    naqt: {
         type: Number,
         default: 0,
         min: 0 // Balance cannot be negative
     },
-    bankTransfer: {
+    bank: {
         type: Number,
         default: 0,
         min: 0 // Balance cannot be negative
     },
-    dollarTransfer: {
-        type: Number,
-        default: 0,
-        min: 0 // Balance cannot be negative
-    },
-    lastUpdated: {
-        type: Date,
-        default: Date.now
-    }
 }, {
     timestamps: true
 });
 
 // Initialize a single balance document if it doesn't exist
-balanceSchema.statics.initializeBalance = async function () {
-    const existingBalance = await this.findOne();
+balanceSchema.statics.initializeBalance = async function (session = null) {
+    const options = session ? { session } : {};
+    const existingBalance = await this.findOne({}, {}, options);
     if (!existingBalance) {
-        await this.create({
-            cash: 0,
-            bankTransfer: 0,
-            dollarTransfer: 0
-        });
+        await this.create({ naqt: 0, bank: 0 }, options);
     }
 };
 
 // Update balance based on payment method, type, and amount
-balanceSchema.statics.updateBalance = async function (paymentMethod, type, amount) {
-    if (!['cash', 'bankTransfer', 'dollarTransfer'].includes(paymentMethod)) {
-        throw new Error(`Invalid payment method: ${paymentMethod}`);
+balanceSchema.statics.updateBalance = async function (paymentMethod, type, amount, session = null) {
+    if (!['naqt', 'bank'].includes(paymentMethod)) {
+        throw new Error(`Noto‘g‘ri to‘lov usuli: ${paymentMethod}`);
     }
 
-    const balance = await this.findOne();
-    if (!balance) {
-        throw new Error('Balance document not found');
+    if (amount < 0) {
+        throw new Error('To‘lov summasi manfiy bo‘lishi mumkin emas');
     }
 
-    if (type === 'kirim') {
-        balance[paymentMethod] += amount;
-    } else if (type === 'chiqim') {
-        if (balance[paymentMethod] < amount) {
-            throw new Error(`Insufficient balance in ${paymentMethod}`);
-        }
-        balance[paymentMethod] -= amount;
+    const update = type === 'kirim'
+        ? { $inc: { [paymentMethod]: amount } }
+        : { $inc: { [paymentMethod]: -amount } };
+
+    const filter = type === 'chiqim'
+        ? { [paymentMethod]: { $gte: amount } } // Ensure sufficient balance for chiqim
+        : {};
+
+    const options = {
+        new: true,
+        upsert: true, // Create document if it doesn't exist
+        setDefaultsOnInsert: true,
+        ...(session && { session }) // Include session if provided
+    };
+
+    const balance = await this.findOneAndUpdate(filter, {
+        ...update,
+        lastUpdated: new Date()
+    }, options);
+
+    if (!balance && type === 'chiqim') {
+        throw new Error(`${paymentMethod}da yetarli mablag‘ yo‘q`);
     }
 
-    balance.lastUpdated = new Date();
-    await balance.save();
     return balance;
 };
 
 // Get the single balance document
-balanceSchema.statics.getBalance = async function () {
-    const balance = await this.findOne();
+balanceSchema.statics.getBalance = async function (session = null) {
+    const options = session ? { session } : {};
+    const balance = await this.findOne({}, {}, options);
     if (!balance) {
-        throw new Error('Balance document not found');
+        throw new Error('Balans hujjati topilmadi');
     }
     return balance;
 };
 
 const Balance = mongoose.model('Balance', balanceSchema);
 module.exports = Balance;
+
+
+
