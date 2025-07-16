@@ -1,4 +1,5 @@
 const Attendance = require("../model/attendanceModal");
+const Admins = require("../model/adminModel");
 const response = require("../utils/response");
 
 class AttendanceController {
@@ -19,23 +20,41 @@ class AttendanceController {
         return response.warning(res, "Noto'g'ri davomat foizi kiritildi");
       }
 
-      const workTypeMap = {
-        0.33: "third_day",
-        0.5: "half_day",
-        0.75: "three_quarter",
-        1: "full_day",
-        1.5: "one_and_half",
-        2: "two_days",
-      };
+      let exactEmployee = await Attendance.findOne({
+        employee: employeeId,
+        date: new Date(date),
+      }).populate("employee");
+
+      let realPercentage = percentage;
+
+      let user = await Admins.findById(employeeId);
+
+      if (user.position === "Bo'lim boshlig'i") {
+        realPercentage = +(Number(percentage) + 0.2).toFixed(2);
+      }
+
+      if (exactEmployee?.employee?.department === "transport") {
+        const attendanceRecord = await Attendance.create({
+          employee: employeeId,
+          date: new Date(date),
+          percentage,
+          unit: department,
+        });
+
+        return response?.success(
+          res,
+          "Davomat muvaffaqiyatli saqlandi",
+          attendanceRecord
+        );
+      }
 
       const attendanceRecord = await Attendance.findOneAndUpdate(
         { employee: employeeId, date: new Date(date) },
         {
           employee: employeeId,
           date: new Date(date),
-          percentage,
-          workType: workTypeMap[percentage],
-          department,
+          percentage: realPercentage,
+          unit: department,
         },
         { upsert: true, new: true }
       );
@@ -46,7 +65,7 @@ class AttendanceController {
         attendanceRecord
       );
     } catch (error) {
-      console.error("Attendance error:", error);
+      console.error("xxxx", error);
       return response.serverError(res, error.message, error);
     }
   }

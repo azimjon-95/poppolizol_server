@@ -231,6 +231,7 @@ const employeeValidation = (req, res, next) => {
           "tozalash",
           "Sotuvchi",
           "oshxona",
+          
         ],
         errorMessage: "Bo‘lim noto‘g‘ri (mavjud bo‘limlardan birini tanlang)",
       },
@@ -325,6 +326,7 @@ const employeeValidation = (req, res, next) => {
             "warehouse",
             "accountant",
             "saler",
+            "unit_head",
           ],
           errorMessage:
             "Rol noto‘g‘ri (admin, manager, specialist, warehouse, accountant yoki bo‘sh)",

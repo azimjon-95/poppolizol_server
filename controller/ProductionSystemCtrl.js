@@ -15,96 +15,96 @@ class ProductionSystem {
     try {
       const { productNormaId, quantityToProduce, selectedMarket } = req.body;
 
-      if (!["tashqi", "ichki"].includes(selectedMarket)) {
-        await session.abortTransaction();
-        session.endSession();
-        return response.error(res, "Market turi noto‘g‘ri");
-      }
+      // if (!["tashqi", "ichki"].includes(selectedMarket)) {
+      //   await session.abortTransaction();
+      //   session.endSession();
+      //   return response.error(res, "Market turi noto‘g‘ri");
+      // }
 
-      const productNorma = await ProductNorma.findById(productNormaId).lean();
-      if (!productNorma) {
-        await session.abortTransaction();
-        session.endSession();
-        return response.error(res, "Mahsulot normasi topilmadi");
-      }
+      // const productNorma = await ProductNorma.findById(productNormaId).lean();
+      // if (!productNorma) {
+      //   await session.abortTransaction();
+      //   session.endSession();
+      //   return response.error(res, "Mahsulot normasi topilmadi");
+      // }
 
-      const materialsUsed = [];
-      for (const item of productNorma.materials) {
-        const requiredQuantity = item.quantity * quantityToProduce;
-        const material = await Material.findById(item.materialId).session(
-          session
-        );
+      // const materialsUsed = [];
+      // for (const item of productNorma.materials) {
+      //   const requiredQuantity = item.quantity * quantityToProduce;
+      //   const material = await Material.findById(item.materialId).session(
+      //     session
+      //   );
 
-        if (!material || material.quantity < requiredQuantity) {
-          await session.abortTransaction();
-          session.endSession();
-          return response.error(
-            res,
-            `Yetarli ${
-              material?.name || "material"
-            } yo‘q. Kerak: ${requiredQuantity}, Mavjud: ${
-              material?.quantity || 0
-            }`
-          );
-        }
+      //   if (!material || material.quantity < requiredQuantity) {
+      //     await session.abortTransaction();
+      //     session.endSession();
+      //     return response.error(
+      //       res,
+      //       `Yetarli ${
+      //         material?.name || "material"
+      //       } yo‘q. Kerak: ${requiredQuantity}, Mavjud: ${
+      //         material?.quantity || 0
+      //       }`
+      //     );
+      //   }
 
-        material.quantity -= requiredQuantity;
-        await material.save({ session });
+      //   material.quantity -= requiredQuantity;
+      //   await material.save({ session });
 
-        materialsUsed.push({
-          materialId: material._id,
-          materialName: material.name,
-          quantityUsed: requiredQuantity,
-          unitPrice: material.price,
-        });
-      }
+      //   materialsUsed.push({
+      //     materialId: material._id,
+      //     materialName: material.name,
+      //     quantityUsed: requiredQuantity,
+      //     unitPrice: material.price,
+      //   });
+      // }
 
-      const existingProduct = await FinishedProduct.findOne({
-        productName: productNorma.productName,
-        category: productNorma.category,
-        size: productNorma.size,
-        marketType: selectedMarket,
-      }).session(session);
+      // const existingProduct = await FinishedProduct.findOne({
+      //   productName: productNorma.productName,
+      //   category: productNorma.category,
+      //   size: productNorma.size,
+      //   marketType: selectedMarket,
+      // }).session(session);
 
-      let finishedProduct;
-      if (existingProduct) {
-        existingProduct.quantity += quantityToProduce;
-        await existingProduct.save({ session });
-        finishedProduct = existingProduct;
-      } else {
-        finishedProduct = await FinishedProduct.create(
-          [
-            {
-              productName: productNorma.productName,
-              category: productNorma.category,
-              size: productNorma.size,
-              marketType: selectedMarket,
-              quantity: quantityToProduce,
-              productionCost: productNorma?.cost?.productionCost,
-              sellingPrice: 0,
-            },
-          ],
-          { session }
-        );
-        finishedProduct = finishedProduct[0];
-      }
+      // let finishedProduct;
+      // if (existingProduct) {
+      //   existingProduct.quantity += quantityToProduce;
+      //   await existingProduct.save({ session });
+      //   finishedProduct = existingProduct;
+      // } else {
+      //   finishedProduct = await FinishedProduct.create(
+      //     [
+      //       {
+      //         productName: productNorma.productName,
+      //         category: productNorma.category,
+      //         size: productNorma.size,
+      //         marketType: selectedMarket,
+      //         quantity: quantityToProduce,
+      //         productionCost: productNorma?.cost?.productionCost,
+      //         sellingPrice: 0,
+      //       },
+      //     ],
+      //     { session }
+      //   );
+      //   finishedProduct = finishedProduct[0];
+      // }
 
-      await ProductionHistory.create(
-        [
-          {
-            productNormaId: productNorma._id,
-            productName: productNorma.productName,
-            quantityProduced: quantityToProduce,
-            materialsUsed,
-            totalCost: productNorma.cost.productionCost,
-            marketType: selectedMarket,
-            gasAmount: productNorma.cost.gasPerUnit * quantityToProduce, // ✅ hisoblangan va yozilgan
-            electricity:
-              productNorma.cost.electricityPerUnit * quantityToProduce, // ✅ hisoblangan va yozilgan
-          },
-        ],
-        { session }
-      );
+      // await ProductionHistory.create(
+      //   [
+      //     {
+      //       productNormaId: productNorma._id,
+      //       productName: productNorma.productName,
+      //       quantityProduced: quantityToProduce,
+      //       materialsUsed,
+      //       totalCost: productNorma.cost.productionCost,
+      //       marketType: selectedMarket,
+      //       gasAmount: productNorma.cost.gasPerUnit * quantityToProduce, // ✅ hisoblangan va yozilgan
+      //       electricity:
+      //         productNorma.cost.electricityPerUnit * quantityToProduce, // ✅ hisoblangan va yozilgan
+      //     },
+      //   ],
+      //   { session }
+      // );
 
       // Calculate and save Polizol salaries
       await calculatePolizolSalaries({
@@ -116,11 +116,18 @@ class ProductionSystem {
       await session.commitTransaction();
       return response.created(
         res,
-        `✅ ${productNorma.productName} dan ${quantityToProduce} dona ishlab chiqarildi`,
+        `test dan ${quantityToProduce} dona ishlab chiqarildi`,
         {
-          totalCost: productNorma.cost.productionCost * quantityToProduce,
+          totalCost: 1000 * quantityToProduce,
         }
       );
+      // return response.created(
+      //   res,
+      //   `✅ ${productNorma.productName} dan ${quantityToProduce} dona ishlab chiqarildi`,
+      //   {
+      //     totalCost: productNorma.cost.productionCost * quantityToProduce,
+      //   }
+      // );
     } catch (error) {
       await session.abortTransaction();
       console.log("Production error:", error);
