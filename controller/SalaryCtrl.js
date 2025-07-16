@@ -127,7 +127,7 @@ class SalaryService {
             }
 
             const employees = await Employee.find({ paymentType: 'oylik' })
-                .select('firstName middleName lastName department position salary passportSeries');
+                .select('firstName middleName lastName unit position salary passportSeries');
 
             const salaryInfoPromises = employees.map(async (employee) => {
                 const salaryInfo = await this.getEmployeeSalaryInfoInternal(employee._id, monthNum, yearNum);
@@ -522,7 +522,7 @@ class SalaryService {
             }
 
             const salaryPayments = await SalaryPayment.find({ month: monthNum, year: yearNum })
-                .populate('employeeId', 'firstName middleName lastName department position')
+                .populate('employeeId', 'firstName middleName lastName unit position')
                 .sort({ 'employeeId.firstName': 1 });
 
             const totalBaseSalary = salaryPayments.reduce((sum, payment) => sum + payment.baseSalary, 0);

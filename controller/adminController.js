@@ -8,7 +8,8 @@ class AdminController {
   async getEmployees(req, res) {
     try {
       const employees = await Employee.find().select("-password"); // Parolni chiqarmaslik uchun
-      if (!employees.length) return response.notFound(res, "Xodimlar topilmadi");
+      if (!employees.length)
+        return response.notFound(res, "Xodimlar topilmadi");
       response.success(res, "Barcha xodimlar", employees);
     } catch (err) {
       response.serverError(res, err.message, err);
@@ -18,7 +19,9 @@ class AdminController {
   // Xodimni ID bo'yicha olish (Read - Single)
   async getEmployeeById(req, res) {
     try {
-      const employee = await Employee.findById(req.params.id).select("-password");
+      const employee = await Employee.findById(req.params.id).select(
+        "-password"
+      );
       if (!employee) return response.notFound(res, "Xodim topilmadi");
       response.success(res, "Xodim topildi", employee);
     } catch (err) {
@@ -159,7 +162,42 @@ class AdminController {
       response.serverError(res, err.message, err);
     }
   }
-}
 
+  async loginUnitHead(req, res) {
+    try {
+      const { pin } = req.body;
+
+      if (!pin) {
+        return response.warning(res, "Parol kiritilishi shart");
+      }
+
+      const unitHead = await Employee.findOne({ unitHeadPassword: pin });
+
+      if (!unitHead) {
+        return response.error(
+          res,
+          "Parol noto‘g‘ri yoki foydalanuvchi topilmadi"
+        );
+      }
+
+      const token = jwt.sign(
+        { id: unitHead._id, login: unitHead.login },
+        process.env.JWT_SECRET_KEY,
+        { expiresIn: "1w" }
+      );
+
+      const unitHeadData = unitHead.toJSON();
+      delete unitHeadData.password;
+      delete unitHeadData.unitHeadPassword;
+
+      response.success(res, "Bo‘lim boshlig‘i sifatida kirildi", {
+        employee: unitHeadData,
+        token,
+      });
+    } catch (err) {
+      response.serverError(res, err.message, err);
+    }
+  }
+}
 
 module.exports = new AdminController();

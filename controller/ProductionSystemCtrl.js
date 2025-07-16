@@ -128,6 +128,7 @@ class ProductionSystem {
         { session }
       );
 
+
       // 6. Polizol ish haqini hisoblash
       await calculatePolizolSalaries({
         producedCount: quantityToProduce,

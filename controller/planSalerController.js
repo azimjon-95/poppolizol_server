@@ -8,7 +8,7 @@ class SalesController {
     async getSalesEmployees(req, res) {
         try {
             const salesEmployees = await Employee.find({ role: { $in: ['saler', 'saler_meneger'] } })
-                .select('firstName lastName department position phone')
+                .select('firstName lastName unit position phone')
                 .lean();
 
             return response.success(res, "Sotuvchilar muvaffaqiyatli olindi", salesEmployees);
@@ -92,7 +92,7 @@ class SalesController {
     async getAllPlans(req, res) {
         try {
             const plans = await Plan.find()
-                .populate('employeeId', 'firstName lastName department position')
+                .populate('employeeId', 'firstName lastName unit position')
                 .lean();
 
             return response.success(res, "Planlar muvaffaqiyatli olindi", plans);
@@ -105,7 +105,7 @@ class SalesController {
     async getPlanById(req, res) {
         try {
             const plan = await Plan.findById(req.params.id)
-                .populate('employeeId', 'firstName lastName department position')
+                .populate('employeeId', 'firstName lastName unit position')
                 .lean();
 
             if (!plan) {

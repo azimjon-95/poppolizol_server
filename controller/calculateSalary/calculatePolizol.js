@@ -15,7 +15,7 @@ async function calculatePolizolSalaries({
       $gte: new Date(today.setHours(0, 0, 0, 0)),
       $lte: new Date(today.setHours(23, 59, 59, 999)),
     },
-    department: "polizol",
+    unit: "polizol",
   })
     .populate("employee")
     .session(session);
@@ -37,6 +37,7 @@ async function calculatePolizolSalaries({
   const workers = todayAttendances.map((a) => ({
     employee: a.employee._id,
     percentage: a.percentage,
+
     amount: Math.round(salaryPerPercent * a.percentage),
   }));
 
@@ -55,7 +56,5 @@ async function calculatePolizolSalaries({
     { session }
   );
 }
-
-
 
 module.exports = calculatePolizolSalaries;

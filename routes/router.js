@@ -8,10 +8,10 @@ const materialService = require("../controller/materialCtrl");
 const normaController = require("../controller/normaController");
 const productionSystem = require("../controller/ProductionSystemCtrl");
 const factoryController = require("../controller/factoryConfigCtrl");
-const ExpenseController = require('../controller/expensesController');
-const SalaryService = require('../controller/SalaryCtrl');
-const SalesController = require('../controller/planSalerController');
-const SaleController = require('../controller/saleCartController'); // Path to your SaleController
+const ExpenseController = require("../controller/expensesController");
+const SalaryService = require("../controller/SalaryCtrl");
+const SalesController = require("../controller/planSalerController");
+const SaleController = require("../controller/saleCartController"); // Path to your SaleController
 const salaryController = require("../controller/calculateSalary/salaryController");
 // Validations
 const adminValidation = require("../validation/adminValidation");
@@ -35,9 +35,9 @@ router.get("/attendance/all", attendanceController.getAllAttendanceByDateRange);
 router.post("/material/create", materialValidation, materialController.create);
 router.get("/material/all", materialController.getAll);
 router.put(
-    "/material/update/:id",
-    materialValidation,
-    materialController.update
+  "/material/update/:id",
+  materialValidation,
+  materialController.update
 );
 router.delete("/material/delete/:id", materialController.delete);
 
@@ -47,10 +47,10 @@ router.get("/material/firms", materialService.getFirms);
 router.get("/material/getincomes", materialService.getIncomes);
 
 // Route to handle debt payment
-router.post('/material/paydebtincome', materialService.payDebtIncom);
+router.post("/material/paydebtincome", materialService.payDebtIncom);
 router.get(
-    "/material/filtered-materials",
-    materialService.getFilteredMaterials
+  "/material/filtered-materials",
+  materialService.getFilteredMaterials
 );
 
 /**
@@ -94,13 +94,14 @@ router.delete("/finished-products/:id", productionSystem.deleteFinished);
  * ============================
  */
 router.post("/admin/login", adminController.login);
+router.post("/admin/pin", adminController.loginUnitHead);
 router.post("/admin/create", adminValidation, adminController.createEmployee);
 router.get("/admin/all", adminController.getEmployees);
 router.get("/admin/:id", adminController.getEmployeeById);
 router.put(
-    "/admin/update/:id",
-    adminValidation,
-    adminController.updateEmployee
+  "/admin/update/:id",
+  adminValidation,
+  adminController.updateEmployee
 );
 router.delete("/admin/delete/:id", adminController.deleteEmployee);
 
@@ -122,15 +123,15 @@ router.delete("/expense/:id", ExpenseController.deleteExpense);
  */
 router.get("/employees/:month/:year", SalaryService.getAllEmployeesSalaryInfo);
 router.get(
-    "/employee/:employeeId/:month/:year",
-    SalaryService.getEmployeeSalaryInfo
+  "/employee/:employeeId/:month/:year",
+  SalaryService.getEmployeeSalaryInfo
 );
 router.post("/pay", SalaryService.paySalary);
 router.post("/penalty", SalaryService.addPenalty);
 router.get("/report/:month/:year", SalaryService.getMonthlySalaryReport);
 router.get(
-    "/penalties/:employeeId/:month/:year",
-    SalaryService.getEmployeePenalties
+  "/penalties/:employeeId/:month/:year",
+  SalaryService.getEmployeePenalties
 );
 router.post("/overpayment", SalaryService.handleOverpayment);
 
@@ -139,31 +140,35 @@ router.post("/overpayment", SalaryService.handleOverpayment);
  * Salar Cart Routes
  * ============================
  */
-router.post('/sales', SaleController.createSale);
-router.get('/sales/:id', SaleController.getSaleById);
-router.put('/sales/:id', SaleController.updateSale);
-router.delete('/sales/:id', SaleController.deleteSale);
-router.post('/sales/:id/pay-debt', SaleController.payDebt);
-router.get('/filtered', SaleController.getFilteredSales);
-router.post('/sales/:id/return', SaleController.returnItems);
-router.get('/sales/customer', SaleController.getCustomerSales);
-router.get('/companys', SaleController.getCompanys);
-router.get('/sales/customer/:customerId/completed', SaleController.getCustomerCompletedSales);
-router.get('/sales/customer/:customerId/active', SaleController.getCustomerActiveSales);
-
-
+router.post("/sales", SaleController.createSale);
+router.get("/sales/:id", SaleController.getSaleById);
+router.put("/sales/:id", SaleController.updateSale);
+router.delete("/sales/:id", SaleController.deleteSale);
+router.post("/sales/:id/pay-debt", SaleController.payDebt);
+router.get("/filtered", SaleController.getFilteredSales);
+router.post("/sales/:id/return", SaleController.returnItems);
+router.get("/sales/customer", SaleController.getCustomerSales);
+router.get("/companys", SaleController.getCompanys);
+router.get(
+  "/sales/customer/:customerId/completed",
+  SaleController.getCustomerCompletedSales
+);
+router.get(
+  "/sales/customer/:customerId/active",
+  SaleController.getCustomerActiveSales
+);
 
 /**
  * ============================
  * Plan Salas Routes
  * ============================
  */
-router.get('/sales-employees', SalesController.getSalesEmployees);
-router.post('/plans', SalesController.createPlan);
-router.get('/plans', SalesController.getAllPlans);
-router.get('/plans/:id', SalesController.getPlanById);
-router.put('/plans/:id', SalesController.updatePlan);
-router.delete('/plans/:id', SalesController.deletePlan);
+router.get("/sales-employees", SalesController.getSalesEmployees);
+router.post("/plans", SalesController.createPlan);
+router.get("/plans", SalesController.getAllPlans);
+router.get("/plans/:id", SalesController.getPlanById);
+router.put("/plans/:id", SalesController.updatePlan);
+router.delete("/plans/:id", SalesController.deletePlan);
 
 module.exports = router;
 router.post("/sales", SaleController.createSale);
