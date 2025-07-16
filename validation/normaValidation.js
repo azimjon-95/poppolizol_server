@@ -18,6 +18,10 @@ const normaValidation = (req, res, next) => {
         minLength: 1,
         maxLength: 255,
       },
+      salePrice: {
+        type: "number",
+        minimum: 0
+      },
       materials: {
         type: "array",
         items: {
@@ -25,7 +29,7 @@ const normaValidation = (req, res, next) => {
           properties: {
             materialId: {
               type: "string",
-              pattern: "^[0-9a-fA-F]{24}$", // Validates MongoDB ObjectId
+              pattern: "^[0-9a-fA-F]{24}$",
             },
             quantity: {
               type: "number",
@@ -51,17 +55,10 @@ const normaValidation = (req, res, next) => {
       description: {
         type: "string",
       },
-      size: {
-        type: "string",
-        minLength: 1,
-      },
       cost: {
         type: "object",
         properties: {
-          productionCost: {
-            type: "number",
-            minimum: 0,
-          },
+
           gasPerUnit: {
             type: "number",
             minimum: 0,
@@ -70,39 +67,59 @@ const normaValidation = (req, res, next) => {
             type: "number",
             minimum: 0,
           },
+          laborCost: {
+            type: "number",
+            minimum: 0,
+          },
+          otherExpenses: {
+            type: "number",
+            minimum: 0,
+          },
+          totalCost: {
+            type: "number",
+            minimum: 0,
+          },
         },
-        required: ["productionCost", "gasPerUnit", "electricityPerUnit"],
+        required: [
+          "gasPerUnit",
+          "electricityPerUnit",
+          "laborCost",
+          "otherExpenses",
+
+        ],
         additionalProperties: false,
         errorMessage: {
           type: "Xarajat ob'ekti noto'g'ri formatda",
           required: {
-            productionCost: "Ishlab chiqarish xarajati kiritilishi shart",
             gasPerUnit: "Birlik uchun gaz xarajati kiritilishi shart",
             electricityPerUnit: "Birlik uchun elektr xarajati kiritilishi shart",
+            laborCost: "Mehnat xarajati kiritilishi shart",
+            otherExpenses: "Qo'shimcha xarajatlar kiritilishi shart",
           },
           properties: {
-            productionCost: "Ishlab chiqarish xarajati 0 dan kichik bo'lmasligi kerak",
-            gasPerUnit: "Birlik uchun gaz xarajati 0 dan kichik bo'lmasligi kerak",
-            electricityPerUnit: "Birlik uchun elektr xarajati 0 dan kichik bo'lmasligi kerak",
+            gasPerUnit: "Gaz xarajati 0 dan kichik bo'lmasligi kerak",
+            electricityPerUnit: "Elektr xarajati 0 dan kichik bo'lmasligi kerak",
+            laborCost: "Mehnat xarajati 0 dan kichik bo'lmasligi kerak",
+            otherExpenses: "Qo'shimcha xarajatlar 0 dan kichik bo'lmasligi kerak",
+            totalCost: "Jami xarajat 0 dan kichik bo'lmasligi kerak",
+            salePrice: "Sotuv narxi 0 dan kichik bo'lmasligi kerak",
           },
           additionalProperties: "Xarajat uchun ruxsat etilmagan maydon kiritildi",
         },
       },
     },
-    required: ["productName", "category", "materials", "size", "cost"],
+    required: ["productName", "category", "materials", "cost"],
     additionalProperties: false,
     errorMessage: {
       required: {
         productName: "Mahsulot nomi kiritilishi shart",
         category: "Mahsulot turi kiritilishi shart",
         materials: "Mahsulot uchun material kiritilishi shart",
-        size: "Mahsulot o'lchami kiritilishi shart",
         cost: "Mahsulot xarajatlari kiritilishi shart",
       },
       properties: {
         productName: "Mahsulot nomi 100 ta belgidan oshmasligi kerak",
-        category: "category 255 ta belgidan oshmasligi kerak",
-        size: "Mahsulot o'lchami kiritilishi shart",
+        category: "Mahsulot turi 255 ta belgidan oshmasligi kerak",
       },
       additionalProperties: "Ruxsat etilmagan maydon kiritildi",
     },

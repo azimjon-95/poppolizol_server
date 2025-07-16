@@ -13,129 +13,147 @@ class ProductionSystem {
     session.startTransaction();
 
     try {
-      const { productNormaId, quantityToProduce, selectedMarket } = req.body;
+      const {
+        productNormaId,
+        productName,
+        quantityToProduce,
+        consumedMaterials,
+        materialStatistics,
+        marketType = "tashqi"
+      } = req.body;
 
-      if (!["tashqi", "ichki"].includes(selectedMarket)) {
-        await session.abortTransaction();
-        session.endSession();
-        return response.error(res, "Market turi noto‘g‘ri");
+      // 1. Kiruvchi ma'lumotlarni tekshirish
+      if (!productNormaId || !quantityToProduce || quantityToProduce <= 0) {
+        throw new Error("Mahsulot normasi yoki miqdori noto‘g‘ri");
+      }
+
+      if (!Array.isArray(consumedMaterials) || !Array.isArray(materialStatistics)) {
+        throw new Error("Material ma'lumotlari noto‘g‘ri");
       }
 
       const productNorma = await ProductNorma.findById(productNormaId).lean();
       if (!productNorma) {
-        await session.abortTransaction();
-        session.endSession();
-        return response.error(res, "Mahsulot normasi topilmadi");
+        throw new Error("Mahsulot normasi topilmadi");
       }
 
-      const materialsUsed = [];
-      for (const item of productNorma.materials) {
-        const requiredQuantity = item.quantity * quantityToProduce;
-        const material = await Material.findById(item.materialId).session(
-          session
-        );
+      if (!productNorma.cost) {
+        throw new Error("Mahsulot normasida ishlab chiqarish xarajatlari aniqlanmagan");
+      }
 
-        if (!material || material.quantity < requiredQuantity) {
-          await session.abortTransaction();
-          session.endSession();
-          return response.error(
-            res,
-            `Yetarli ${
-              material?.name || "material"
-            } yo‘q. Kerak: ${requiredQuantity}, Mavjud: ${
-              material?.quantity || 0
-            }`
+      const {
+        productionCost = 0,
+        gasPerUnit = 0,
+        electricityPerUnit = 0
+      } = productNorma.cost;
+
+      // 2. Materiallarni tekshirish va kamaytirish
+      const materialsUsed = [];
+      console.log(materialsUsed);
+
+      for (const consumed of consumedMaterials) {
+        const material = await Material.findById(consumed.materialId).session(session);
+        if (!material) {
+          throw new Error(`Material topilmadi: ID ${consumed.materialId}`);
+        }
+
+        const consumedQuantity = consumed.quantity || 0;
+
+        if (material.quantity < consumedQuantity) {
+          throw new Error(
+            `Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`
           );
         }
 
-        material.quantity -= requiredQuantity;
+        material.quantity -= consumedQuantity;
         await material.save({ session });
 
         materialsUsed.push({
           materialId: material._id,
           materialName: material.name,
-          quantityUsed: requiredQuantity,
+          quantityUsed: consumedQuantity,
           unitPrice: material.price,
         });
       }
 
-      const existingProduct = await FinishedProduct.findOne({
+      // 3. Statistika tekshiruvi
+      if (materialStatistics.length !== consumedMaterials.length) {
+        throw new Error("Material statistikasi va ishlatilgan materiallar mos emas");
+      }
+
+      for (const stat of materialStatistics) {
+        if (!["exceed", "insufficient", "equal"].includes(stat.status)) {
+          throw new Error(`Noto‘g‘ri status: ${stat.status} uchun ${stat.materialName}`);
+        }
+      }
+
+      // 4. Tayyor mahsulotni yangilash yoki yaratish
+      let finishedProduct = await FinishedProduct.findOne({
         productName: productNorma.productName,
         category: productNorma.category,
         size: productNorma.size,
-        marketType: selectedMarket,
+        marketType,
       }).session(session);
 
-      let finishedProduct;
-      if (existingProduct) {
-        existingProduct.quantity += quantityToProduce;
-        await existingProduct.save({ session });
-        finishedProduct = existingProduct;
+      if (finishedProduct) {
+        finishedProduct.quantity += quantityToProduce;
+        await finishedProduct.save({ session });
       } else {
-        finishedProduct = await FinishedProduct.create(
-          [
-            {
-              productName: productNorma.productName,
-              category: productNorma.category,
-              size: productNorma.size,
-              marketType: selectedMarket,
-              quantity: quantityToProduce,
-              productionCost: productNorma?.cost?.productionCost,
-              sellingPrice: 0,
-            },
-          ],
+        const created = await FinishedProduct.create(
+          [{
+            productName: productNorma.productName,
+            category: productNorma.category,
+            marketType,
+            quantity: quantityToProduce,
+            productionCost,
+            sellingPrice: productNorma?.salePrice || 0,
+          }],
           { session }
         );
-        finishedProduct = finishedProduct[0];
+        finishedProduct = created[0];
       }
 
+      // 5. Ishlab chiqarish tarixini saqlash
       await ProductionHistory.create(
-        [
-          {
-            productNormaId: productNorma._id,
-            productName: productNorma.productName,
-            quantityProduced: quantityToProduce,
-            materialsUsed,
-            totalCost: productNorma.cost.productionCost,
-            marketType: selectedMarket,
-            gasAmount: productNorma.cost.gasPerUnit * quantityToProduce, // ✅ hisoblangan va yozilgan
-            electricity:
-              productNorma.cost.electricityPerUnit * quantityToProduce, // ✅ hisoblangan va yozilgan
-          },
-        ],
+        [{
+          productNormaId: productNorma._id,
+          productName: productNorma.productName,
+          quantityProduced: quantityToProduce,
+          materialsUsed,
+          materialStatistics,
+          totalCost: productionCost * quantityToProduce,
+          marketType,
+          gasAmount: gasPerUnit * quantityToProduce,
+          electricity: electricityPerUnit * quantityToProduce,
+        }],
         { session }
       );
 
-      // Calculate and save Polizol salaries
+      // 6. Polizol ish haqini hisoblash
       await calculatePolizolSalaries({
         producedCount: quantityToProduce,
-        loadedCount: 0, // yoki kerak bo‘lsa yuk sonini bering
+        loadedCount: 0,
         session,
       });
 
+      // 7. Success
       await session.commitTransaction();
-      return response.created(
-        res,
-        `✅ ${productNorma.productName} dan ${quantityToProduce} dona ishlab chiqarildi`,
+      return response.created(res, `✅ ${productNorma.productName} dan ${quantityToProduce} dona ishlab chiqarildi`,
         {
-          totalCost: productNorma.cost.productionCost * quantityToProduce,
+          totalCost: productionCost * quantityToProduce,
+          materialStatistics,
         }
       );
     } catch (error) {
       await session.abortTransaction();
       console.log("Production error:", error);
-
-      return response.error(
-        res,
-        "❌ Ishlab chiqarish xatolikka uchradi",
-        error.message
-      );
+      return response.error(res, "❌ Ishlab chiqarish xatolikka uchradi", error.message);
     } finally {
       session.endSession();
     }
   }
 
-  // Get all finished products
+
+
   async finishedProducts(req, res) {
     try {
       const products = await FinishedProduct.find();
@@ -172,121 +190,6 @@ class ProductionSystem {
       );
     }
   }
-
-  // Production process
-  // async productionProcess(req, res) {
-  //     const session = await mongoose.startSession();
-  //     session.startTransaction();
-
-  //     try {
-  //         const { productNormaId, quantityToProduce, selectedMarket } = req.body;
-
-  //         // Validate selectedMarket
-  //         if (!['tashqi', 'ichki'].includes(selectedMarket)) {
-  //             await session.abortTransaction();
-  //             session.endSession();
-  //             return response.error(res, "Invalid market type. Must be 'tashqi' or 'ichki'");
-  //         }
-
-  //         // Get product norma
-  //         const productNorma = await ProductNorma.findById(productNormaId)
-  //             .populate('materials.materialId')
-  //             .session(session);
-
-  //         if (!productNorma) {
-  //             await session.abortTransaction();
-  //             session.endSession();
-  //             return response.notFound(res, "Product norma not found");
-  //         }
-
-  //         // Check if enough materials available
-  //         let totalCost = 0;
-  //         const materialsUsed = [];
-
-  //         for (const requirement of productNorma.materials) {
-  //             const material = requirement.materialId;
-
-  //             const requiredQuantity = requirement.quantity * quantityToProduce;
-
-  //             if (material.quantity < requiredQuantity) {
-  //                 await session.abortTransaction();
-  //                 session.endSession();
-  //                 return response.error(res, `${material.name} yetarli emas. Talab qilinadigan miqdor: ${requiredQuantity}, mavjud miqdor: ${material.quantity}`);
-
-  //             }
-
-  //             const cost = material.price * requiredQuantity;
-  //             totalCost += cost;
-
-  //             materialsUsed.push({
-  //                 materialId: material._id,
-  //                 materialName: material.name,
-  //                 quantityUsed: requiredQuantity,
-  //                 unitPrice: material.price,
-  //             });
-  //         }
-
-  //         // Deduct materials from warehouse
-  //         for (const requirement of productNorma.materials) {
-  //             const material = requirement.materialId;
-  //             const requiredQuantity = requirement.quantity * quantityToProduce;
-
-  //             await Material.findByIdAndUpdate(
-  //                 material._id,
-  //                 { $inc: { quantity: -requiredQuantity } },
-  //                 { session }
-  //             );
-  //         }
-
-  //         // Add to finished products or update existing
-  //         const existingProduct = await FinishedProduct.findOne({
-  //             productName: productNorma.productName,
-  //             category: productNorma.category,
-  //             size: productNorma.size,
-  //             marketType: selectedMarket, // Match marketType
-  //         }).session(session);
-
-  //         if (existingProduct) {
-  //             await FinishedProduct.findByIdAndUpdate(
-  //                 existingProduct._id,
-  //                 {
-  //                     $inc: { quantity: quantityToProduce },
-  //                     productionCost: (existingProduct.productionCost * existingProduct.quantity + totalCost) / (existingProduct.quantity + quantityToProduce),
-  //                 },
-  //                 { session }
-  //             );
-  //         } else {
-  //             await FinishedProduct.create([{
-  //                 productName: productNorma.productName,
-  //                 category: productNorma.category,
-  //                 quantity: quantityToProduce,
-  //                 size: productNorma.size,
-  //                 marketType: selectedMarket,
-  //                 sellingPrice: productNorma.sellingPrice || 0,
-  //                 productionCost: totalCost / quantityToProduce,
-  //             }], { session });
-  //         }
-
-  //         // Record production history
-  //         await ProductionHistory.create([{
-  //             productNormaId: productNorma._id,
-  //             productName: productNorma.productName,
-  //             quantityProduced: quantityToProduce,
-  //             materialsUsed,
-  //             totalCost,
-  //             marketType: selectedMarket,
-  //         }], { session });
-
-  //         await session.commitTransaction();
-  //         return response.created(res, `Successfully produced ${quantityToProduce} units of ${productNorma.productName} for ${selectedMarket} market`, { totalCost });
-
-  //     } catch (error) {
-  //         await session.abortTransaction();
-  //         return response.error(res, "Production process failed", error.message);
-  //     } finally {
-  //         session.endSession();
-  //     }
-  // }
 
   async createBn5Production(req, res) {
     const session = await mongoose.startSession();
@@ -345,8 +248,7 @@ class ProductionSystem {
         session.endSession();
         return response.error(
           res,
-          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${
-            bn3Material?.quantity || 0
+          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${bn3Material?.quantity || 0
           }`
         );
       }
@@ -642,6 +544,48 @@ class ProductionSystem {
       return response.success(res, "Inventory found", inventory);
     } catch (error) {
       return response.error(res, error.message);
+    }
+  }
+
+
+  // Update (PUT /api/finished-products/:id)
+  async updateFinished(req, res) {
+    try {
+      const { id } = req.params;
+      const updatedData = req.body;
+
+      const updatedProduct = await FinishedProduct.findByIdAndUpdate(
+        id,
+        updatedData,
+        { new: true, runValidators: true }
+      );
+
+      if (!updatedProduct) {
+        return response.notFound(res, "Mahsulot topilmadi");
+      }
+
+      return response.success(res, "Mahsulot muvaffaqiyatli yangilandi", updatedProduct);
+    } catch (error) {
+      console.error("Update error:", error);
+      return response.serverError(res, "Mahsulotni yangilashda xatolik", error.message);
+    }
+  }
+
+  // Delete (DELETE /api/finished-products/:id)
+  async deleteFinished(req, res) {
+    try {
+      const { id } = req.params;
+
+      const deletedProduct = await FinishedProduct.findByIdAndDelete(id);
+
+      if (!deletedProduct) {
+        return response.notFound(res, "Mahsulot topilmadi");
+      }
+
+      return response.success(res, "Mahsulot muvaffaqiyatli o'chirildi", deletedProduct);
+    } catch (error) {
+      console.error("Delete error:", error);
+      return response.serverError(res, "Mahsulotni o‘chirishda xatolik", error.message);
     }
   }
 }

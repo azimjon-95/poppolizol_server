@@ -21,10 +21,7 @@ const FinishedProductSchema = new mongoose.Schema({
         enum: ["tashqi", "ichki"],
         default: "tashqi",
     },
-    size: {
-        type: String,
-        required: true,
-    },
+
     productionDate: {
         type: Date,
         default: Date.now,

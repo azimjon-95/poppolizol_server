@@ -69,7 +69,7 @@ router.delete("/factory/:id", factoryController.delete);
  * Norma Routes
  * ============================
  */
-router.post("/norma/create", normaValidation, normaController.createNorma);
+router.post("/norma/create", normaController.createNorma);
 router.get("/norma/all", normaController.getNorma);
 router.put("/norma/update/:id", normaValidation, normaController.updateNorma);
 router.delete("/norma/delete/:id", normaController.deleteNorma);
@@ -85,6 +85,8 @@ router.post("/production-process", productionSystem.productionProcess);
 router.post("/production/bn5", productionSystem.createBn5Production);
 router.post("/production/salesBN5", productionSystem.productionForSalesBN5);
 router.get("/inventory", productionSystem.getInventory);
+router.put("/finished-products/:id", productionSystem.updateFinished);
+router.delete("/finished-products/:id", productionSystem.deleteFinished);
 
 /**
  * ============================
