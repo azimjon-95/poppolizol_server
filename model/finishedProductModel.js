@@ -21,7 +21,6 @@ const FinishedProductSchema = new mongoose.Schema({
         enum: ["tashqi", "ichki"],
         default: "tashqi",
     },
-
     productionDate: {
         type: Date,
         default: Date.now,
@@ -30,37 +29,124 @@ const FinishedProductSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
-    sellingPrice: { // Sotuv narxi
+    sellingPrice: {
         type: Number,
         required: true,
         min: 0,
     },
-
     isReturned: {
         type: Boolean,
         default: false,
     },
-
     returnInfo: {
         returnReason: {
             type: String,
             trim: true,
-            default: '',
+            default: "",
         },
         returnDescription: {
             type: String,
             trim: true,
-            default: '',
+            default: "",
         },
         returnDate: {
             type: Date,
             default: null,
         },
     },
-
+    // Brak (sifatsiz) mahsulotlar uchun qo'shimcha maydonlar
+    isDefective: {
+        type: Boolean,
+        default: false,
+    },
+    defectiveInfo: {
+        defectiveReason: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        defectiveDescription: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+        defectiveDate: {
+            type: Date,
+            default: null,
+        },
+    },
 }, { timestamps: true });
 
 const FinishedProduct = mongoose.model("FinishedProducts", FinishedProductSchema);
 module.exports = FinishedProduct;
+
+
+
+
+
+// const mongoose = require("mongoose");
+
+// const FinishedProductSchema = new mongoose.Schema({
+//     productName: {
+//         type: String,
+//         required: true,
+//         trim: true,
+//     },
+//     category: {
+//         type: String,
+//         required: true,
+//         trim: true,
+//     },
+//     quantity: {
+//         type: Number,
+//         required: true,
+//         min: 0,
+//     },
+//     marketType: {
+//         type: String,
+//         enum: ["tashqi", "ichki"],
+//         default: "tashqi",
+//     },
+
+//     productionDate: {
+//         type: Date,
+//         default: Date.now,
+//     },
+//     productionCost: {
+//         type: Number,
+//         required: true,
+//     },
+//     sellingPrice: { // Sotuv narxi
+//         type: Number,
+//         required: true,
+//         min: 0,
+//     },
+
+//     isReturned: {
+//         type: Boolean,
+//         default: false,
+//     },
+
+//     returnInfo: {
+//         returnReason: {
+//             type: String,
+//             trim: true,
+//             default: '',
+//         },
+//         returnDescription: {
+//             type: String,
+//             trim: true,
+//             default: '',
+//         },
+//         returnDate: {
+//             type: Date,
+//             default: null,
+//         },
+//     },
+
+// }, { timestamps: true });
+
+// const FinishedProduct = mongoose.model("FinishedProducts", FinishedProductSchema);
+// module.exports = FinishedProduct;
 
 

@@ -17,6 +17,7 @@ const salaryController = require("../controller/calculateSalary/salaryController
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
 const normaValidation = require("../validation/normaValidation");
+const DebtController = require('../controller/debtController');
 
 router.get("/salary/getAll", salaryController.getAll);
 
@@ -140,6 +141,7 @@ router.post("/overpayment", SalaryService.handleOverpayment);
  * Salar Cart Routes
  * ============================
  */
+
 router.post("/sales", SaleController.createSale);
 router.get("/sales/:id", SaleController.getSaleById);
 router.put("/sales/:id", SaleController.updateSale);
@@ -157,6 +159,8 @@ router.get(
   "/sales/customer/:customerId/active",
   SaleController.getCustomerActiveSales
 );
+router.get('/transports', SaleController.getTransport);
+router.post('/deliver', SaleController.deliverProduct);
 
 /**
  * ============================
@@ -170,11 +174,18 @@ router.get("/plans/:id", SalesController.getPlanById);
 router.put("/plans/:id", SalesController.updatePlan);
 router.delete("/plans/:id", SalesController.deletePlan);
 
-module.exports = router;
-router.post("/sales", SaleController.createSale);
-router.get("/sales/:id", SaleController.getSaleById);
-router.put("/sales/:id", SaleController.updateSale);
-router.delete("/sales/:id", SaleController.deleteSale);
-router.post("/sales/:id/pay-debt", SaleController.payDebt);
+
+/**
+ * ============================
+ * Debt Routes
+ * ============================
+ */
+router.post('/debts', DebtController.createDebt);
+router.post('/debts/repay', DebtController.repayDebt);
+router.get('/debts/active', DebtController.getActiveDebts);
+router.get('/debts/history', DebtController.getDebtHistory);
+
 
 module.exports = router;
+
+

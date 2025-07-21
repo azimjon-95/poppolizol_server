@@ -161,7 +161,7 @@
 //       required: {
 //         firstName: "Ism kiritish shart",
 //         lastName: "Familya kiritish shart",
-//         department: "Bo‘lim kiritish shart",
+//         department: "",
 //         position: "Lavozim kiritish shart",
 //         passportSeries: "Pasport seriyasi kiritish shart",
 //         phone: "Telefon raqam kiritish shart",
@@ -231,7 +231,7 @@ const employeeValidation = (req, res, next) => {
           "tozalash",
           "Sotuvchi",
           "oshxona",
-          
+
         ],
         errorMessage: "Bo‘lim noto‘g‘ri (mavjud bo‘limlardan birini tanlang)",
       },
@@ -296,7 +296,6 @@ const employeeValidation = (req, res, next) => {
       "phone",
       "address",
       "paymentType",
-      "unit",
     ],
     if: { properties: { isOfficeWorker: { const: true } } },
     then: {
@@ -352,7 +351,6 @@ const employeeValidation = (req, res, next) => {
         address: "Manzil kiritish shart",
         paymentType: "To‘lov turi kiritish shart",
         salary: "Maosh kiritish shart",
-        unit: "Bo‘lim kiritish shart",
         unitHeadPassword: "Bo‘lim boshlig‘ining paroli kiritish shart",
       },
       additionalProperties: "Ruxsat etilmagan maydon kiritildi",
