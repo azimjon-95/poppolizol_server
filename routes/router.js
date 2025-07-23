@@ -18,6 +18,7 @@ const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
 const normaValidation = require("../validation/normaValidation");
 const DebtController = require('../controller/debtController');
+const DashboardController = require('../controller/dashboardController');
 
 router.get("/salary/getAll", salaryController.getAll);
 
@@ -184,6 +185,14 @@ router.post('/debts', DebtController.createDebt);
 router.post('/debts/repay', DebtController.repayDebt);
 router.get('/debts/active', DebtController.getActiveDebts);
 router.get('/debts/history', DebtController.getDebtHistory);
+
+/**
+ * ============================
+ *  Dashboard Routes
+ * ============================
+ */
+router.get('/dashboard', DashboardController.getMonthlyDashboard);
+
 
 
 module.exports = router;
