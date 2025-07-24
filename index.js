@@ -19,7 +19,7 @@ app.use(express.json());
 
 // CORS sozlamalari
 const corsOptions = {
-  origin: "*",
+  origin: "*", // Allows all origins
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   credentials: true,
 };

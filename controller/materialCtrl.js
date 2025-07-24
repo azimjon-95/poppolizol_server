@@ -11,7 +11,6 @@ const mongoose = require("mongoose");
 const response = require("../utils/response");
 
 class MaterialService {
-
     async handleNewIncome(req, res) {
         try {
             const {
@@ -26,7 +25,7 @@ class MaterialService {
                 totalWorkerCost,
                 vatAmount,
                 workerPayments,
-                debtPayment // New field for optional initial debt payment
+                debtPayment
             } = req.body;
 
             // Validation
@@ -34,18 +33,16 @@ class MaterialService {
                 return response.error(res, "Firma va materiallar to‘liq kiritilishi kerak");
             }
 
-            // Prepare firm data (embedded object, no separate Firm model)
+            // Prepare firm data
             const firm = {
                 name: firmData.name,
                 phone: firmData.phone || null,
                 address: firmData.address || null,
             };
 
-            // Prepare materials for income
+            // Prepare materials and calculate total
             const incomeMaterials = [];
             let calculatedTotalWithoutVat = 0;
-
-            // Bulk operations for materials
             const materialUpdates = [];
             const newMaterials = [];
 
@@ -56,7 +53,7 @@ class MaterialService {
 
                 calculatedTotalWithoutVat += item.price * item.quantity;
 
-                incomeMaterials.push({
+                const materialData = {
                     category: item.category || null,
                     currency: item.currency,
                     name: item.name,
@@ -65,22 +62,21 @@ class MaterialService {
                     transportCostPerUnit: item.transportCostPerUnit || 0,
                     unit: item.unit,
                     workerCostPerUnit: item.workerCostPerUnit || 0,
-                });
+                };
 
-                // Material model handling
+                // Check for existing material
                 const existingMaterial = await Material.findOne({ name: item.name }).lean();
                 if (existingMaterial) {
                     const totalQty = existingMaterial.quantity + item.quantity;
-                    const totalCost = existingMaterial.avgPrice * existingMaterial.quantity + item.price * item.quantity;
-                    const newAvgPrice = totalCost / totalQty;
+                    const newPrice = Math.max(existingMaterial.avgPrice, item.price); // Always take the higher price
 
                     materialUpdates.push({
                         updateOne: {
                             filter: { _id: existingMaterial._id },
-                            update: { quantity: totalQty, avgPrice: newAvgPrice },
+                            update: { quantity: totalQty, avgPrice: newPrice },
                         },
                     });
-                    incomeMaterials[incomeMaterials.length - 1].material = existingMaterial._id;
+                    materialData.material = existingMaterial._id;
                 } else {
                     newMaterials.push({
                         name: item.name,
@@ -89,8 +85,12 @@ class MaterialService {
                         price: item.price,
                         currency: item.currency,
                         category: item.category || null,
+                        avgPrice: item.price
                     });
+                    materialData.material = null; // Will be updated after insertion
                 }
+
+                incomeMaterials.push(materialData);
             }
 
             // Execute bulk operations for materials
@@ -99,12 +99,17 @@ class MaterialService {
             }
             if (newMaterials.length > 0) {
                 const createdMaterials = await Material.insertMany(newMaterials);
-                createdMaterials.forEach((material, index) => {
-                    incomeMaterials.find((im) => im.material === null).material = material._id;
+                // Update incomeMaterials with new material IDs
+                let newMaterialIndex = 0;
+                incomeMaterials.forEach((im) => {
+                    if (!im.material) {
+                        im.material = createdMaterials[newMaterialIndex]._id;
+                        newMaterialIndex++;
+                    }
                 });
             }
 
-            // Validate workerPayments if provided
+            // Validate workerPayments
             if (workerPayments && Array.isArray(workerPayments)) {
                 for (const payment of workerPayments) {
                     if (!payment.workerId || !payment.payment) {
@@ -113,7 +118,7 @@ class MaterialService {
                 }
             }
 
-            // Calculate VAT and totals if not provided
+            // Calculate financials
             const finalVatPercentage = vatPercentage || 0;
             const finalVatAmount = vatAmount || (calculatedTotalWithoutVat * finalVatPercentage) / 100;
             const finalTotalWithVat = totalWithVat || calculatedTotalWithoutVat + finalVatAmount;
@@ -122,15 +127,15 @@ class MaterialService {
             const finalTotalWorkerCost = totalWorkerCost || materialsList.reduce((sum, item) => sum + (item.workerCostPerUnit || 0) * item.quantity, 0);
             const finalPrice = price || 0;
 
-            // Initialize debt fields
+            // Initialize debt
             const debt = {
-                initialAmount: finalTotalWithVat, // Total amount including VAT
-                remainingAmount: finalTotalWithVat - finalPrice, // Remaining after initial payment
+                initialAmount: finalTotalWithVat,
+                remainingAmount: finalTotalWithVat - finalPrice,
                 status: finalTotalWithVat - finalPrice <= 0 ? 'fully_paid' : finalPrice > 0 ? 'partially_paid' : 'pending',
                 debtPayments: []
             };
 
-            // Handle initial debt payment if provided
+            // Handle initial debt payment
             if (debtPayment && debtPayment.amount && debtPayment.paymentMethod) {
                 if (!['naqt', 'bank'].includes(debtPayment.paymentMethod)) {
                     return response.error(res, "Noto‘g‘ri to‘lov usuli");
@@ -148,7 +153,7 @@ class MaterialService {
                 debt.status = debt.remainingAmount === 0 ? 'fully_paid' : 'partially_paid';
             }
 
-            // Create income record
+            // Create single income record
             const income = await Income.create({
                 firm,
                 materials: incomeMaterials,
@@ -161,7 +166,7 @@ class MaterialService {
                 totalWorkerCost: finalTotalWorkerCost,
                 vatAmount: finalVatAmount,
                 workerPayments: workerPayments || [],
-                debt, // Include debt object
+                debt,
                 date: new Date(),
             });
 
@@ -171,6 +176,7 @@ class MaterialService {
             return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
         }
     }
+
 
 
     async createFirm(req, res) {

@@ -1,141 +1,266 @@
+// // -----------------------------------------------------------------
+// let today = new Date();
+// today.setHours(0, 0, 0, 0); // Faqat sana
+
+// // 1. Bugungi SalaryRecord ni topish
+// let salaryRecord = await SalaryRecord.findOne({
+//   date: {
+//     $gte: new Date(today),
+//     $lte: new Date(today.getTime() + 86399999), // 23:59:59
+//   },
+//   department: "polizol",
+// });
+
+// // 2. Yuklangan mahsulotlar hisoblash
+// const loadedCount = items.reduce((acc, i) => acc + i.quantity, 0);
+// const loadAmount = loadedCount * 400;
+
+// // 3. Agar mavjud bo‘lmasa — yangi SalaryRecord yaratish (faqat yuklash uchun)
+// if (!salaryRecord) {
+//   // Ehtimol, hali ishlab chiqarilmagan, faqat yuklangan
+//   const emptyAttendances = await Attendance.find({
+//     date: {
+//       $gte: new Date(today),
+//       $lte: new Date(today.getTime() + 86399999),
+//     },
+//     unit: "polizol",
+//   });
+
+//   if (emptyAttendances.length === 0) {
+//     throw new Error("Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi");
+//   }
+
+//   const totalPercentage = emptyAttendances.reduce(
+//     (sum, a) => sum + a.percentage,
+//     0
+//   );
+//   const salaryPerPercent = loadAmount / totalPercentage;
+
+//   const workers = emptyAttendances.map((a) => ({
+//     employee: a.employee,
+//     percentage: a.percentage,
+//     amount: Math.round(salaryPerPercent * a.percentage),
+//   }));
+
+//   salaryRecord = await SalaryRecord.create({
+//     date: new Date(),
+//     department: "polizol",
+//     producedCount: 0,
+//     loadedCount,
+//     totalSum: loadAmount,
+//     salaryPerPercent,
+//     workers,
+//   });
+// } else {
+//   // 4. Mavjud bo‘lsa: loadedCount, totalSum yangilanadi, workers qayta hisoblanadi
+
+//   const todayAttendances = await Attendance.find({
+//     date: {
+//       $gte: new Date(today),
+//       $lte: new Date(today.getTime() + 86399999),
+//     },
+//     unit: "polizol",
+//   });
+
+//   const totalPercentage = todayAttendances.reduce(
+//     (sum, a) => sum + a.percentage,
+//     0
+//   );
+
+//   const newLoadedCount = salaryRecord.loadedCount + loadedCount;
+//   const newTotalSum = salaryRecord.totalSum + loadAmount;
+//   const newSalaryPerPercent = newTotalSum / totalPercentage;
+
+//   const updatedWorkers = todayAttendances.map((a) => ({
+//     employee: a.employee,
+//     percentage: a.percentage,
+//     amount: Math.round(newSalaryPerPercent * a.percentage),
+//   }));
+
+//   salaryRecord.loadedCount = newLoadedCount;
+//   salaryRecord.totalSum = newTotalSum;
+//   salaryRecord.salaryPerPercent = newSalaryPerPercent;
+//   salaryRecord.workers = updatedWorkers;
+
+//   await salaryRecord.save();
+// }
+
+// // -----------------------------------------------------------------
 const { Salecart, Customer } = require("../model/saleCartSchema");
 const Expense = require("../model/expenseModel");
+const Balance = require("../model/balance");
 const Employee = require("../model/adminModel");
 const Plan = require("../model/planSalerModel");
-const Balance = require("../model/balance");
 const FinishedProduct = require("../model/finishedProductModel");
 const response = require("../utils/response");
+const Transport = require("../model/transportModel");
 const mongoose = require("mongoose");
 const moment = require("moment");
-const Attendance = require("../model/attendanceModal");
 const SalaryRecord = require("../model/salaryRecord");
+const Attendance = require("../model/attendanceModal");
 
 class SaleController {
-  // Create a new sale
   async createSale(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      const { customer: customerData, salerId, items, payment } = req.body;
+      const {
+        customer: customerData,
+        customerType,
+        transport,
+        salerId,
+        items,
+        payment,
+      } = req.body;
 
-      // // Validate input
-      // if (!customerData || !salerId || !items || !payment) {
-      //     await session.abortTransaction();
-      //     return response.error(res, "Barcha maydonlar to'ldirilishi shart");
-      // }
+      if (!customerData || !salerId || !items || !payment) {
+        await session.abortTransaction();
+        return response.error(res, "Barcha maydonlar to'ldirilishi shart");
+      }
 
-      // if (!customerData.name) {
-      //     await session.abortTransaction();
-      //     return response.error(res, "Mijoz ismi kiritilishi shart");
-      // }
+      if (!customerData.name) {
+        await session.abortTransaction();
+        return response.error(res, "Mijoz ismi kiritilishi shart");
+      }
 
-      // if (payment.totalAmount < payment.paidAmount) {
-      //     await session.abortTransaction();
-      //     return response.error(res, "To'lov summasi yakuniy summadan oshib ketdi!");
-      // }
+      if (payment.totalAmount < payment.paidAmount) {
+        await session.abortTransaction();
+        return response.error(
+          res,
+          "To'lov summasi yakuniy summadan oshib ketdi!"
+        );
+      }
 
-      // if (payment.paidAmount > 0 && !payment.paymentType) {
-      //     await session.abortTransaction();
-      //     return response.error(res, "To'lov turi kiritilmadi!");
-      // }
+      if (payment.paidAmount > 0 && !payment.paymentType) {
+        await session.abortTransaction();
+        return response.error(res, "To'lov turi kiritilmadi!");
+      }
 
-      // // Verify saler exists
-      // const employee = await Employee.findById(salerId).session(session);
-      // if (!employee) {
-      //     await session.abortTransaction();
-      //     return response.notFound(res, "Sotuvchi topilmadi");
-      // }
+      // Verify saler exists
+      const employee = await Employee.findById(salerId).session(session);
+      if (!employee) {
+        await session.abortTransaction();
+        return response.notFound(res, "Sotuvchi topilmadi");
+      }
 
-      // // Find or create customer
-      // let customer = await Customer.findOne({
-      //     $or: [
-      //         { phone: customerData.phone || '' },
-      //         { name: customerData.name, type: customerData.type || 'individual' }
-      //     ]
-      // }).session(session);
+      // Find or create customer
+      let customer = await Customer.findOne({
+        $or: [
+          { phone: customerData.phone || "" },
+          { name: customerData.name, type: customerData.type || "individual" },
+        ],
+      }).session(session);
 
-      // if (!customer) {
-      //     customer = new Customer({
-      //         name: customerData.name,
-      //         phone: customerData.phone || '',
-      //         type: customerData.type || 'individual',
-      //         companyAddress: customerData.type === 'company' ? customerData.companyAddress : undefined,
-      //     });
-      //     await customer.save({ session });
-      // }
+      if (!customer) {
+        customer = new Customer({
+          name: customerData.name,
+          phone: customerData.phone || "",
+          type: customerData.type || "individual",
+          companyAddress:
+            customerData.type === "company"
+              ? customerData.companyAddress
+              : undefined,
+        });
+        await customer.save({ session });
+      }
 
-      // // Get current month for plan based on current date
-      // const currentDate = new Date();
-      // const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+      // Handle transport
+      if (transport) {
+        let transportRecord = await Transport.findOne({ transport }).session(
+          session
+        );
+        if (!transportRecord) {
+          transportRecord = new Transport({
+            transport,
+            balance: payment.transportCost || 0,
+          });
+        } else {
+          transportRecord.balance += payment.transportCost || 0;
+        }
+        await transportRecord.save({ session });
+      }
 
-      // // Find plan for current month
-      // const plan = await Plan.findOne({
-      //     employeeId: salerId,
-      //     month
-      // }).session(session);
+      // Get current month for plan based on current date
+      const currentDate = new Date();
+      const month = `${currentDate.getFullYear()}.${String(
+        currentDate.getMonth() + 1
+      ).padStart(2, "0")}`;
 
-      // if (!plan) {
-      //     await session.abortTransaction();
-      //     return response.notFound(res, `Sotuvchi uchun ${month} oyida plan topilmadi`);
-      // }
+      // Find plan for current month
+      const plan = await Plan.findOne({
+        employeeId: salerId,
+        month,
+      }).session(session);
 
-      // // Validate and update product quantities
-      // for (const item of items) {
-      //     const product = await FinishedProduct.findById(item._id).session(session);
-      //     if (!product) {
-      //         await session.abortTransaction();
-      //         return response.notFound(res, `Maxsulot topilmadi: ${item.productName}`);
-      //     }
-      //     if (product.quantity < item.quantity) {
-      //         await session.abortTransaction();
-      //         return response.error(res, `Maxsulot ${item.productName} uchun yetarli miqdor yo'q`);
-      //     }
-      //     product.quantity -= item.quantity;
-      //     await product.save({ session });
-      // }
+      if (!plan) {
+        await session.abortTransaction();
+        return response.notFound(
+          res,
+          `Sotuvchi uchun ${month} oyida plan topilmadi`
+        );
+      }
 
-      // // Create new sale
-      // const newSale = new Salecart({
-      //     customerId: customer._id,
-      //     salerId,
-      //     items,
-      //     payment,
-      //     salesperson: `${employee.firstName} ${employee.lastName}`,
-      //     date: new Date().toLocaleDateString('uz-UZ'),
-      //     time: new Date().toLocaleTimeString('uz-UZ'),
-      //     transport: req.body.transport || '',
-      //     isContract: req.body.isContract ?? true,
-      //     deliveryDate: req.body.deliveryDate || null
-      // });
+      // Validate items and add productId
+      for (const item of items) {
+        const product = await FinishedProduct.findById(item._id).session(
+          session
+        );
+        if (!product) {
+          await session.abortTransaction();
+          return response.notFound(
+            res,
+            `Maxsulot topilmadi: ${item.productName}`
+          );
+        }
+        item.productId = item._id; // Add productId to item
+      }
 
-      // // Update balance if there's a payment
-      // if (payment.paidAmount > 0) {
-      //     const balanceField = payment.paymentType === 'naqt' ? 'naqt' : 'bank';
-      //     await Balance.updateBalance(balanceField, 'kirim', payment.paidAmount, { session });
+      // Create new sale
+      const newSale = new Salecart({
+        customerId: customer._id,
+        salerId,
+        items,
+        payment,
+        customerType,
+        salesperson: `${employee.firstName} ${employee.lastName}`,
+        date: new Date().toLocaleDateString("uz-UZ"),
+        time: new Date().toLocaleTimeString("uz-UZ"),
+        transport: transport || "",
+        isContract: req.body.isContract ?? true,
+        deliveryDate: req.body.deliveryDate || null,
+      });
 
-      //     // Update plan based on paid amount
-      //     plan.achievedAmount += payment.paidAmount;
-      //     plan.progress = Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100);
-      //     await plan.save({ session });
-      // }
+      // Update balance if there's a payment
+      if (payment.paidAmount > 0) {
+        const balanceField = payment.paymentType === "naqt" ? "naqt" : "bank";
+        await Balance.updateBalance(balanceField, "kirim", payment.paidAmount, {
+          session,
+        });
 
-      // // Save sale
-      // const savedSale = await newSale.save({ session });
+        // Update plan based on paid amount
+        plan.achievedAmount += payment.paidAmount;
+        plan.progress = Math.min(
+          (plan.achievedAmount / plan.targetAmount) * 100,
+          100
+        );
+        await plan.save({ session });
+      }
 
-      // // Add sale to plan's sales array
-      // plan.sales.push(savedSale._id);
-      // await plan.save({ session });
+      // Save sale
+      const savedSale = await newSale.save({ session });
 
-      // await session.commitTransaction();
+      // Add sale to plan's sales array
+      plan.sales.push(savedSale._id);
+      await plan.save({ session });
 
-      // // Populate data in response
-      // const populatedSale = await Salecart.findById(savedSale._id)
-      //     .populate('customerId', 'name type phone companyAddress')
-      //     .populate('salerId', 'firstName lastName')
-      //     .lean();
+      await session.commitTransaction();
 
-      // return response.created(res, "Shartnoma muvaffaqiyatli tuzildi!", populatedSale);
+      // Populate data in response
+      const populatedSale = await Salecart.findById(savedSale._id)
+        .populate("customerId", "name type phone companyAddress")
+        .populate("salerId", "firstName lastName")
+        .lean();
 
       // -----------------------------------------------------------------
       let today = new Date();
@@ -228,7 +353,11 @@ class SaleController {
 
       // -----------------------------------------------------------------
 
-      return response.created(res, "Shartnoma muvaffaqiyatli tuzildi!", {});
+      return response.created(
+        res,
+        "Shartnoma muvaffaqiyatli tuzildi!",
+        populatedSale
+      );
     } catch (error) {
       await session.abortTransaction();
       return response.serverError(
@@ -241,7 +370,63 @@ class SaleController {
     }
   }
 
-  // Get sale by ID
+  async deliverProduct(req, res) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const { saleId, items } = req.body;
+
+      // 1. Sotuvni topamiz
+      const sale = await Salecart.findById(saleId).session(session);
+      if (!sale) {
+        return response.notFound(res, "Sotuv topilmadi");
+      }
+
+      for (const item of items) {
+        const { productId, quantity } = item;
+
+        // 2. Tayyor mahsulotni topib, quantity ni kamaytiramiz
+        const product = await FinishedProduct.findById(productId).session(
+          session
+        );
+        if (!product) {
+          return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
+        }
+
+        if (product.quantity < quantity) {
+          return response.error(
+            res,
+            `Mahsulot yetarli emas: ${product.productName}`
+          );
+        }
+
+        product.quantity -= quantity;
+        await product.save({ session });
+
+        const saleItem = sale.items.find(
+          (i) =>
+            i.productId &&
+            productId &&
+            i.productId.toString() === productId.toString()
+        );
+
+        saleItem.deliveredQuantity += quantity;
+        saleItem.updatedAt = new Date();
+      }
+
+      await sale.save({ session });
+
+      await session.commitTransaction();
+      return response.success(res, "Mahsulotlar yetkazib berildi!");
+    } catch (error) {
+      await session.abortTransaction();
+      return response.serverError(res, "Xatolik yuz berdi", error.message);
+    } finally {
+      session.endSession();
+    }
+  }
+
   async getSaleById(req, res) {
     try {
       const { id } = req.params;
@@ -457,15 +642,28 @@ class SaleController {
   }
 
   // Delete sale
+
   async deleteSale(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
-
     try {
       const sale = await Salecart.findById(req.params.id).session(session);
       if (!sale) {
         await session.abortTransaction();
         return response.notFound(res, "Sotuv topilmadi!");
+      }
+
+      // Check if any items have been delivered
+      const hasDeliveredItems = sale.items.some(
+        (item) => item.deliveredQuantity > 0
+      );
+      if (hasDeliveredItems) {
+        console.log(hasDeliveredItems);
+        await session.abortTransaction();
+        return response.error(
+          res,
+          "Sotuv o‘chirilmaydi: Mahsulotlar mijozga yetkazib berilgan!"
+        );
       }
 
       // Calculate total sale amount
@@ -474,8 +672,8 @@ class SaleController {
         0
       );
 
-      // Get current month for plan
-      const currentDate = new Date(sale.createdAt); // Use sale's creation date to ensure correct month
+      // Get current month for plan based on sale's creation date
+      const currentDate = new Date(sale.createdAt);
       const month = `${currentDate.getFullYear()}.${String(
         currentDate.getMonth() + 1
       ).padStart(2, "0")}`;
@@ -505,7 +703,7 @@ class SaleController {
           : 0;
       await plan.save({ session });
 
-      // Restore product quantities
+      // Restore product quantities to warehouse (only for non-delivered items)
       for (const item of sale.items) {
         const product = await FinishedProduct.findById(item._id).session(
           session
@@ -554,31 +752,27 @@ class SaleController {
     try {
       const { amount, description, paymentType } = req.body;
 
-      if (!amount || amount <= 0) {
-        await session.abortTransaction();
-        return response.error(res, "To‘lov summasi noto‘g‘ri kiritildi!");
+      // Validate input
+      if (amount <= 0) {
+        throw new Error("To‘lov summasi noto‘g‘ri kiritildi!");
       }
       if (!["naqt", "bank"].includes(paymentType)) {
-        await session.abortTransaction();
-        return response.error(res, "To‘lov turi noto‘g‘ri kiritildi!");
+        throw new Error("To‘lov turi noto‘g‘ri kiritildi!");
       }
 
+      // Fetch sale with session
       const sale = await Salecart.findById(req.params.id).session(session);
       if (!sale) {
-        await session.abortTransaction();
-        return response.notFound(res, "Sotuv topilmadi!");
+        throw new Error("Sotuv topilmadi!");
       }
 
+      // Check if payment exceeds total amount
       const newPaidAmount = sale.payment.paidAmount + amount;
       if (newPaidAmount > sale.payment.totalAmount) {
-        await session.abortTransaction();
-        return response.error(
-          res,
-          "To‘lov summasi yakuniy summadan oshib ketdi!"
-        );
+        throw new Error("To‘lov summasi yakuniy summadan oshib ketdi!");
       }
 
-      // Get the month for the plan based on the sale's createdAt date
+      // Get month for the plan
       const currentDate = new Date(sale.createdAt);
       const month = `${currentDate.getFullYear()}.${String(
         currentDate.getMonth() + 1
@@ -589,18 +783,12 @@ class SaleController {
         employeeId: sale.salerId,
         month,
       }).session(session);
-
       if (!plan) {
-        await session.abortTransaction();
-        return response.notFound(
-          res,
-          `Sotuvchi uchun ${month} oyida plan topilmadi`
-        );
+        throw new Error(`Sotuvchi uchun ${month} oyida plan topilmadi`);
       }
 
       // Update balance
-      const balanceField = paymentType === "naqt" ? "naqt" : "bank";
-      await Balance.updateBalance(balanceField, "kirim", amount, { session });
+      await Balance.updateBalance(paymentType, "kirim", amount, session);
 
       // Update sale payment details
       const updatedSale = await Salecart.findByIdAndUpdate(
@@ -616,16 +804,16 @@ class SaleController {
             "payment.paymentHistory": {
               amount,
               date: new Date(),
-              description: description || "",
+              description,
               paidBy: sale.salesperson,
               paymentType,
             },
           },
         },
-        { new: true, runValidators: true }
-      ).session(session);
+        { new: true, runValidators: true, session }
+      );
 
-      // Update plan based on payment amount
+      // Update plan
       plan.achievedAmount += amount;
       plan.progress = Math.min(
         (plan.achievedAmount / plan.targetAmount) * 100,
@@ -640,12 +828,15 @@ class SaleController {
         paymentMethod: paymentType,
         category: "Mijoz tulovi",
         amount,
-        description: description || "Qarz to‘lovi",
+        description,
         date: new Date(),
       });
       await expense.save({ session });
 
+      // Commit transaction
       await session.commitTransaction();
+
+      // Populate and return response
       const populatedSale = await Salecart.findById(updatedSale._id)
         .populate("customerId", "name type phone companyAddress")
         .populate("salerId", "firstName lastName")
@@ -672,7 +863,6 @@ class SaleController {
   async getCompanys(req, res) {
     try {
       const customers = await Customer.find();
-      console.log(customers);
       return response.success(
         res,
         "Mijozlar muvaffaqiyatli o‘qildi!",
@@ -837,134 +1027,211 @@ class SaleController {
 
   // Process product returns
   async returnItems(req, res) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
     try {
-      const { items, totalRefund, reason, paymentType, description } = req.body;
+      const { _id, amount, paymentMethod } = req.query;
 
-      if (!items || !items.length || totalRefund <= 0) {
-        await session.abortTransaction();
-        return response.error(
-          res,
-          "Qaytarish uchun mahsulotlar yoki to‘g‘ri summa kiritilmadi!"
-        );
-      }
-      if (!reason) {
-        await session.abortTransaction();
-        return response.error(res, "Qaytarish sababi kiritilmadi!");
-      }
-      if (!["naqt", "bank"].includes(paymentType)) {
-        await session.abortTransaction();
-        return response.error(res, "To‘lov turi noto‘g‘ri kiritildi!");
-      }
-
-      const sale = await Salecart.findById(req.params.id).session(session);
-      if (!sale) {
-        await session.abortTransaction();
-        return response.notFound(res, "Sotuv topilmadi!");
-      }
-
-      for (const returnItem of items) {
-        const originalProduct = await FinishedProduct.findById(
-          returnItem.productId
-        ).session(session);
-        if (!originalProduct) {
-          await session.abortTransaction();
-          return response.notFound(
-            res,
-            `Mahsulot topilmadi: ${returnItem.productName}`
-          );
+      if (_id && amount && paymentMethod) {
+        // Miqdorning to'g'ri ekanligini tekshirish
+        const paymentAmount = parseFloat(amount);
+        if (isNaN(paymentAmount) || paymentAmount <= 0) {
+          return response.error(res, "Noto'g'ri miqdor kiritildi");
         }
-        const originalItem = sale.items.find(
-          (item) => item._id.toString() === returnItem.productId
-        );
-        if (!originalItem || returnItem.quantity > originalItem.quantity) {
-          await session.abortTransaction();
+
+        // To'lov usulini tekshirish
+        if (!["naqt", "bank"].includes(paymentMethod)) {
           return response.error(
             res,
-            `Qaytarish miqdori ${returnItem.productName} uchun asl sotuv miqdoridan oshib ketdi!`
+            "Noto'g'ri to'lov usuli. \"naqt\" yoki \"bank\" bo'lishi kerak"
           );
         }
-        const newProduct = new FinishedProduct({
-          productName: returnItem.productName,
-          category: returnItem.category,
-          quantity: returnItem.quantity,
-          marketType: originalProduct.marketType,
-          size: originalProduct.size,
-          productionDate: originalProduct.productionDate,
-          productionCost: originalProduct.productionCost,
-          sellingPrice: originalProduct.sellingPrice,
-          isReturned: true,
-          returnInfo: {
-            returnReason: reason,
-            returnDescription: description || "",
-            returnDate: new Date(),
-          },
-        });
-        await newProduct.save({ session });
+
+        // MongoDB sessiyasi va tranzaksiyasini boshlash
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+          // Transport yozuvini _id bo'yicha sessiya ichida topish
+          const transport = await Transport.findById(_id).session(session);
+          if (!transport) {
+            await session.abortTransaction();
+            session.endSession();
+            return response.notFound(res, "Transport topilmadi");
+          }
+
+          // Transport balansining yetarli ekanligini tekshirish
+          if (transport.balance < paymentAmount) {
+            await session.abortTransaction();
+            session.endSession();
+            return response.error(
+              res,
+              "Transport balansida yetarli mablag' yo'q"
+            );
+          }
+
+          // Balansni yangilash
+          const balance = await Balance.updateBalance(
+            paymentMethod,
+            "chiqim",
+            paymentAmount,
+            session
+          );
+          if (!balance) {
+            await session.abortTransaction();
+            session.endSession();
+            return response.error(
+              res,
+              `${paymentMethod} balansida yetarli mablag\' yo\'q`
+            );
+          }
+
+          // Xarajat yozuvini yaratish
+          const expense = new Expense({
+            relatedId: _id,
+            type: "chiqim",
+            paymentMethod,
+            category: "Transport to'lovi",
+            amount: paymentAmount,
+            description: `Transport ${transport.transport} uchun to\'lov`,
+            date: new Date(),
+          });
+          await expense.save({ session });
+
+          // Transport balansidan miqdorni ayirish
+          transport.balance -= paymentAmount;
+          await transport.save({ session });
+
+          // Tranzaksiyani tasdiqlash
+          await session.commitTransaction();
+          session.endSession();
+
+          return response.success(
+            res,
+            "To'lov muvaffaqiyatli amalga oshirildi",
+            {
+              transport,
+              balance,
+              expense,
+            }
+          );
+        } catch (error) {
+          // Xato yuz bersa tranzaksiyani bekor qilish
+          await session.abortTransaction();
+          session.endSession();
+          console.error("Tranzaksiya xatosi:", error);
+          return response.serverError(
+            res,
+            "Tranzaksiya muvaffaqiyatsiz yakunlandi",
+            error.message
+          );
+        }
+      } else {
+        // Barcha transport yozuvlarini olish (o'qish uchun tranzaksiya kerak emas)
+        const transports = await Transport.find();
+        return response.success(
+          res,
+          "Transportlar muvaffaqiyatli olingan",
+          transports
+        );
       }
-
-      const balanceField = paymentType === "naqt" ? "naqt" : "bank";
-      await Balance.updateBalance(balanceField, "chiqim", totalRefund, {
-        session,
-      });
-
-      const expense = new Expense({
-        relatedId: sale._id.toString(),
-        type: "chiqim",
-        paymentMethod: paymentType,
-        category: "Mahsulot qaytarish",
-        amount: totalRefund,
-        description: reason,
-        date: new Date(),
-      });
-      await expense.save({ session });
-
-      const newPaidAmount = sale.payment.paidAmount - totalRefund;
-      const updatedSale = await Salecart.findByIdAndUpdate(
-        req.params.id,
-        {
-          $set: {
-            "payment.paidAmount": Math.max(0, newPaidAmount),
-            "payment.debt":
-              sale.payment.totalAmount - Math.max(0, newPaidAmount),
-            "payment.status":
-              newPaidAmount >= sale.payment.totalAmount ? "paid" : "partial",
-          },
-          $push: {
-            "payment.paymentHistory": {
-              amount: -totalRefund,
-              date: new Date(),
-              description: `Qaytarish: ${reason}`,
-              paidBy: sale.salesperson,
-              paymentType,
-            },
-          },
-        },
-        { new: true, runValidators: true }
-      ).session(session);
-
-      await session.commitTransaction();
-      const populatedSale = await Salecart.findById(updatedSale._id)
-        .populate("customerId", "name type phone companyAddress")
-        .populate("salerId", "firstName lastName")
-        .lean();
-
-      return response.success(
-        res,
-        "Mahsulot qaytarish muvaffaqiyatli!",
-        populatedSale
-      );
     } catch (error) {
-      await session.abortTransaction();
-      return response.serverError(
-        res,
-        "Mahsulot qaytarishda xatolik!",
-        error.message
-      );
-    } finally {
-      session.endSession();
+      console.error("Server xatosi:", error);
+      return response.serverError(res, "Server xatosi", error.message);
+    }
+  }
+
+  // Get transport records
+  // Transport yozuvlarini olish
+  async getTransport(req, res) {
+    try {
+      const { _id, amount } = req.query;
+
+      if (_id && amount) {
+        // Miqdorning to'g'riligini tekshirish
+        const paymentAmount = parseFloat(amount);
+        if (isNaN(paymentAmount) || paymentAmount <= 0) {
+          return response.error(res, "Noto‘g‘ri miqdor kiritildi");
+        }
+
+        // MongoDB sessiyasini boshlash va tranzaksiyani ochish
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+          // Transport yozuvini _id orqali sessiyada topish
+          const transport = await Transport.findById(_id).session(session);
+          if (!transport) {
+            await session.abortTransaction();
+            session.endSession();
+            return response.notFound(res, "Transport topilmadi");
+          }
+
+          // Transport balansining yetarliligini tekshirish
+          if (transport.balance < paymentAmount) {
+            await session.abortTransaction();
+            session.endSession();
+            return response.error(
+              res,
+              "Transport balansida yetarli mablag‘ yo‘q"
+            );
+          }
+
+          // Global balansni to'lov usuli 'naqt' yoki 'bank' bilan yangilash
+          const paymentMethod = "naqt"; // Bu misolda 'naqt' qo‘llanilmoqda; kerak bo‘lsa o‘zgartiring
+          await Balance.updateBalance(
+            paymentMethod,
+            "chiqim",
+            paymentAmount,
+            session
+          );
+
+          // Xarajat yozuvini yaratish
+          const expense = new Expense({
+            relatedId: _id,
+            type: "chiqim",
+            paymentMethod: paymentMethod,
+            category: "Transport",
+            amount: paymentAmount,
+            description: "Shavfyoq uchun",
+            date: new Date(),
+          });
+          await expense.save({ session });
+
+          // Transport balansidan miqdorni ayirish
+          transport.balance -= paymentAmount;
+          await transport.save({ session });
+
+          // Tranzaksiyani yakunlash
+          await session.commitTransaction();
+          session.endSession();
+
+          return response.success(
+            res,
+            "To‘lov muvaffaqiyatli amalga oshirildi va xarajat yozib olindi",
+            transport
+          );
+        } catch (error) {
+          // Xato yuz berganda tranzaksiyani bekor qilish
+          await session.abortTransaction();
+          session.endSession();
+          console.error("Tranzaksiya xatosi:", error);
+          return response.serverError(
+            res,
+            "Tranzaksiya muvaffaqiyatsiz yakunlandi",
+            error.message
+          );
+        }
+      } else {
+        // Barcha transport yozuvlarini olish (o'qish uchun tranzaksiya kerak emas)
+        const transports = await Transport.find();
+        return response.success(
+          res,
+          "Transportlar muvaffaqiyatli olindi",
+          transports
+        );
+      }
+    } catch (error) {
+      console.error("Server xatosi:", error);
+      return response.serverError(res, "Server xatosi", error.message);
     }
   }
 }

@@ -8,6 +8,8 @@ const mongoose = require("mongoose");
 const calculatePolizolSalaries = require("./calculateSalary/calculatePolizol");
 
 class ProductionSystem {
+
+
   async productionProcess(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -19,7 +21,10 @@ class ProductionSystem {
         quantityToProduce,
         consumedMaterials,
         materialStatistics,
-        marketType = "tashqi"
+        marketType = "tashqi",
+        isDefective = false, // Brak holati, agar kiritilmasa false
+        defectiveReason = "", // Brak sababi
+        defectiveDescription = "", // Brak tavsifi
       } = req.body;
 
       // 1. Kiruvchi ma'lumotlarni tekshirish
@@ -29,6 +34,10 @@ class ProductionSystem {
 
       if (!Array.isArray(consumedMaterials) || !Array.isArray(materialStatistics)) {
         throw new Error("Material ma'lumotlari noto‘g‘ri");
+      }
+
+      if (isDefective && !defectiveReason) {
+        throw new Error("Brak mahsulot uchun sabab kiritilishi shart");
       }
 
       const productNorma = await ProductNorma.findById(productNormaId).lean();
@@ -48,7 +57,6 @@ class ProductionSystem {
 
       // 2. Materiallarni tekshirish va kamaytirish
       const materialsUsed = [];
-      console.log(materialsUsed);
 
       for (const consumed of consumedMaterials) {
         const material = await Material.findById(consumed.materialId).session(session);
@@ -87,30 +95,33 @@ class ProductionSystem {
       }
 
       // 4. Tayyor mahsulotni yangilash yoki yaratish
-      let finishedProduct = await FinishedProduct.findOne({
-        productName: productNorma.productName,
-        category: productNorma.category,
-        size: productNorma.size,
-        marketType,
-      }).session(session);
+      let finishedProduct;
 
-      if (finishedProduct) {
-        finishedProduct.quantity += quantityToProduce;
-        await finishedProduct.save({ session });
-      } else {
-        const created = await FinishedProduct.create(
-          [{
-            productName: productNorma.productName,
-            category: productNorma.category,
-            marketType,
-            quantity: quantityToProduce,
-            productionCost,
-            sellingPrice: productNorma?.salePrice || 0,
-          }],
-          { session }
-        );
-        finishedProduct = created[0];
-      }
+      // Always create a new document for defective products
+      const created = await FinishedProduct.create(
+        [{
+          productName: productNorma.productName,
+          category: productNorma.category,
+          marketType,
+          quantity: quantityToProduce,
+          productionCost,
+          sellingPrice: productNorma?.salePrice || 0,
+          isDefective,
+          defectiveInfo: isDefective
+            ? {
+              defectiveReason,
+              defectiveDescription,
+              defectiveDate: new Date(),
+            }
+            : {
+              defectiveReason: "",
+              defectiveDescription: "",
+              defectiveDate: null,
+            },
+        }],
+        { session }
+      );
+      finishedProduct = created[0];
 
       // 5. Ishlab chiqarish tarixini saqlash
       await ProductionHistory.create(
@@ -124,10 +135,17 @@ class ProductionSystem {
           marketType,
           gasAmount: gasPerUnit * quantityToProduce,
           electricity: electricityPerUnit * quantityToProduce,
+          isDefective,
+          defectiveInfo: isDefective
+            ? {
+              defectiveReason,
+              defectiveDescription,
+              defectiveDate: new Date(),
+            }
+            : undefined,
         }],
         { session }
       );
-
 
       // 6. Polizol ish haqini hisoblash
       await calculatePolizolSalaries({
@@ -138,12 +156,18 @@ class ProductionSystem {
 
       // 7. Success
       await session.commitTransaction();
-      return response.created(res, `✅ ${productNorma.productName} dan ${quantityToProduce} dona ishlab chiqarildi`,
-        {
-          totalCost: productionCost * quantityToProduce,
-          materialStatistics,
-        }
-      );
+      return response.created(res, `✅ ${productNorma.productName} dan ${quantityToProduce} dona ishlab chiqarildi${isDefective ? " (Brak sifatida)" : ""}`, {
+        totalCost: productionCost * quantityToProduce,
+        materialStatistics,
+        isDefective,
+        defectiveInfo: isDefective
+          ? {
+            defectiveReason,
+            defectiveDescription,
+            defectiveDate: new Date(),
+          }
+          : undefined,
+      });
     } catch (error) {
       await session.abortTransaction();
       console.log("Production error:", error);
@@ -152,8 +176,6 @@ class ProductionSystem {
       session.endSession();
     }
   }
-
-
 
   async finishedProducts(req, res) {
     try {
@@ -356,7 +378,7 @@ class ProductionSystem {
       } = processData;
 
       if (!processData || !packagingData || !Array.isArray(packagingData)) {
-        throw new Error("Noto'g'ri kirish ma'lumotlari");
+        return response.error(res, "Noto'g'ri kirish ma'lumotlari");
       }
 
       // Materiallarni topish
@@ -377,7 +399,7 @@ class ProductionSystem {
       );
 
       if (!bn5Material || !melMaterial || !ipMaterial || !qopQogoz || !kraf) {
-        throw new Error("Kerakli materiallar topilmadi");
+        return response.error(res, "Kerakli materiallar topilmadi");
       }
 
       // Arqon (gramm -> kg)
@@ -409,7 +431,7 @@ class ProductionSystem {
         kraf.quantity < totalStakanQuantity ||
         qopQogoz.quantity < totalQopQuantity
       ) {
-        throw new Error("Materiallar miqdori yetarli emas");
+        return response.error(res, "Materiallar miqdori yetarli emas");
       }
 
       // Material miqdorlarini kamaytirish
@@ -429,7 +451,7 @@ class ProductionSystem {
         ]);
 
       if (!bn5Saved || !melSaved || !ipSaved || !krafSaved || !qopSaved) {
-        throw new Error("Materiallar miqdorini yangilashda xatolik yuz berdi");
+        return response.error(res, "Materiallar miqdorini yangilashda xatolik yuz berdi");
       }
 
       // Tayyor mahsulotlarni saqlash
@@ -439,7 +461,8 @@ class ProductionSystem {
         const { label, bn5Amount: pkgBn5Amount, quantity, unit, rope } = pkg;
 
         if (!label || !pkgBn5Amount || !quantity || !unit) {
-          throw new Error(
+          return response.error(
+            res,
             `Noto'g'ri qadoqlash ma'lumotlari: ${JSON.stringify(pkg)}`
           );
         }
@@ -487,7 +510,7 @@ class ProductionSystem {
         kraftPaper,
         sellingPrice,
         qop,
-        price, // Use the price field directly from processData
+        price,
         items: packagingData.map((pkg) => ({
           label: pkg.label,
           bn5Amount: pkg.bn5Amount,
@@ -510,7 +533,7 @@ class ProductionSystem {
           0
         )} dona tashqi bozor uchun muvaffaqiyatli ishlab chiqarildi`,
         {
-          totalCost: price, // Return the provided price as totalCost
+          totalCost: price,
           inventoryId: inventory._id,
           finishedProducts: finishedProducts.map((fp) => ({
             id: fp._id,

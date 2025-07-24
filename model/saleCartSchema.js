@@ -8,17 +8,17 @@ const customerSchema = new mongoose.Schema({
     company: { type: String },
 }, { timestamps: true });
 
-
 const saleSchema = new mongoose.Schema({
     date: { type: String, required: true, default: () => new Date().toLocaleDateString('uz-UZ') },
     time: { type: String, required: true, default: () => new Date().toLocaleTimeString('uz-UZ') },
-    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true }, // bog'langan customer
-
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
     transport: { type: String, default: '' },
     items: [{
         productName: { type: String, required: true },
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'FinishedProduct', required: true }, // Added productId
         category: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 },
+        deliveredQuantity: { type: Number, default: 0 }, // New field to track delivered quantity
         marketType: { type: String, default: 'tashqi' },
         productionCost: { type: Number, required: true },
         sellingPrice: { type: Number, required: true },
@@ -39,24 +39,24 @@ const saleSchema = new mongoose.Schema({
         status: { type: String, enum: ['paid', 'partial'], default: 'partial' },
         paymentDescription: { type: String, default: '' },
         discountReason: { type: String, default: '' },
-        paymentType: { type: String, enum: ['naqt', 'bank'], default: 'naqt' }, // New field for initial payment type
+        paymentType: { type: String, enum: ['naqt', 'bank'], default: 'naqt' },
         isActive: { type: Boolean, default: true },
         paymentHistory: [{
             amount: { type: Number, required: true },
             date: { type: Date, default: Date.now },
             description: { type: String, default: '' },
             paidBy: { type: String, required: true },
-            paymentType: { type: String, enum: ['naqt', 'bank'], required: true }, // New field for payment history
+            paymentType: { type: String, enum: ['naqt', 'bank'], required: true },
         }],
     },
     salesperson: { type: String, required: true },
     salerId: { type: mongoose.Schema.Types.ObjectId, required: true },
     isContract: { type: Boolean, default: true },
+    customerType: { type: String, default: "internal" },
     deliveryDate: { type: Date, default: null },
 }, {
     timestamps: true,
 });
-
 
 saleSchema.pre('save', function (next) {
     if (this.payment.debt === 0) {
@@ -64,9 +64,9 @@ saleSchema.pre('save', function (next) {
     }
     next();
 });
+
 const Salecart = mongoose.model('Salecart', saleSchema);
 const Customer = mongoose.model('Customer', customerSchema);
 
 module.exports = { Salecart, Customer };
-
 

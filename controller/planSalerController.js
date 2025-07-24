@@ -8,7 +8,7 @@ class SalesController {
     async getSalesEmployees(req, res) {
         try {
             const salesEmployees = await Employee.find({ role: { $in: ['saler', 'saler_meneger'] } })
-                .select('firstName lastName unit position phone')
+                .select('firstName lastName unit position phone department')
                 .lean();
 
             return response.success(res, "Sotuvchilar muvaffaqiyatli olindi", salesEmployees);
