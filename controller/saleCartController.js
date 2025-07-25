@@ -1,91 +1,3 @@
-// // -----------------------------------------------------------------
-// let today = new Date();
-// today.setHours(0, 0, 0, 0); // Faqat sana
-
-// // 1. Bugungi SalaryRecord ni topish
-// let salaryRecord = await SalaryRecord.findOne({
-//   date: {
-//     $gte: new Date(today),
-//     $lte: new Date(today.getTime() + 86399999), // 23:59:59
-//   },
-//   department: "polizol",
-// });
-
-// // 2. Yuklangan mahsulotlar hisoblash
-// const loadedCount = items.reduce((acc, i) => acc + i.quantity, 0);
-// const loadAmount = loadedCount * 400;
-
-// // 3. Agar mavjud bo‘lmasa — yangi SalaryRecord yaratish (faqat yuklash uchun)
-// if (!salaryRecord) {
-//   // Ehtimol, hali ishlab chiqarilmagan, faqat yuklangan
-//   const emptyAttendances = await Attendance.find({
-//     date: {
-//       $gte: new Date(today),
-//       $lte: new Date(today.getTime() + 86399999),
-//     },
-//     unit: "polizol",
-//   });
-
-//   if (emptyAttendances.length === 0) {
-//     throw new Error("Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi");
-//   }
-
-//   const totalPercentage = emptyAttendances.reduce(
-//     (sum, a) => sum + a.percentage,
-//     0
-//   );
-//   const salaryPerPercent = loadAmount / totalPercentage;
-
-//   const workers = emptyAttendances.map((a) => ({
-//     employee: a.employee,
-//     percentage: a.percentage,
-//     amount: Math.round(salaryPerPercent * a.percentage),
-//   }));
-
-//   salaryRecord = await SalaryRecord.create({
-//     date: new Date(),
-//     department: "polizol",
-//     producedCount: 0,
-//     loadedCount,
-//     totalSum: loadAmount,
-//     salaryPerPercent,
-//     workers,
-//   });
-// } else {
-//   // 4. Mavjud bo‘lsa: loadedCount, totalSum yangilanadi, workers qayta hisoblanadi
-
-//   const todayAttendances = await Attendance.find({
-//     date: {
-//       $gte: new Date(today),
-//       $lte: new Date(today.getTime() + 86399999),
-//     },
-//     unit: "polizol",
-//   });
-
-//   const totalPercentage = todayAttendances.reduce(
-//     (sum, a) => sum + a.percentage,
-//     0
-//   );
-
-//   const newLoadedCount = salaryRecord.loadedCount + loadedCount;
-//   const newTotalSum = salaryRecord.totalSum + loadAmount;
-//   const newSalaryPerPercent = newTotalSum / totalPercentage;
-
-//   const updatedWorkers = todayAttendances.map((a) => ({
-//     employee: a.employee,
-//     percentage: a.percentage,
-//     amount: Math.round(newSalaryPerPercent * a.percentage),
-//   }));
-
-//   salaryRecord.loadedCount = newLoadedCount;
-//   salaryRecord.totalSum = newTotalSum;
-//   salaryRecord.salaryPerPercent = newSalaryPerPercent;
-//   salaryRecord.workers = updatedWorkers;
-
-//   await salaryRecord.save();
-// }
-
-// // -----------------------------------------------------------------
 const { Salecart, Customer } = require("../model/saleCartSchema");
 const Expense = require("../model/expenseModel");
 const Balance = require("../model/balance");
@@ -658,7 +570,7 @@ class SaleController {
         (item) => item.deliveredQuantity > 0
       );
       if (hasDeliveredItems) {
-        console.log(hasDeliveredItems);
+
         await session.abortTransaction();
         return response.error(
           res,
@@ -1237,3 +1149,6 @@ class SaleController {
 }
 
 module.exports = new SaleController();
+
+
+

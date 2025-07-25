@@ -100,6 +100,7 @@ router.post("/admin/pin", adminController.loginUnitHead);
 router.post("/admin/create", adminValidation, adminController.createEmployee);
 router.get("/admin/all", adminController.getEmployees);
 router.get("/admin/:id", adminController.getEmployeeById);
+router.get("/ochisleniya", adminController.ochisleniyaEmployees);
 router.put(
   "/admin/update/:id",
   adminValidation,

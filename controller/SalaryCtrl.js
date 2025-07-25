@@ -1,7 +1,9 @@
-const Employee = require('../model/adminModel'); // Admins model
-const SalaryPayment = require('../model/salaryPaymentmodel');
-const Penalty = require('../model/penaltyModel');
-const Expense = require('../model/expenseModel');
+const mongoose = require("mongoose");
+const Employee = require("../model/adminModel"); // Admins model
+const SalaryPayment = require("../model/salaryPaymentmodel");
+const Penalty = require("../model/penaltyModel");
+const Expense = require("../model/expenseModel");
+const response = require("../utils/response");
 
 class SalaryService {
     // Ishchi uchun oylik ma'lumotlarini olish
@@ -11,19 +13,13 @@ class SalaryService {
             const monthNum = parseInt(month);
             const yearNum = parseInt(year);
 
-            if (!employeeId || monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Noto'g'ri employeeId, oy yoki yil",
-                });
+            if (!mongoose.Types.ObjectId.isValid(employeeId) || monthNum < 1 || monthNum > 12 || yearNum < 2020) {
+                return response.error(res, "Noto'g'ri employeeId, oy yoki yil");
             }
 
-            const employee = await Employee.findById(employeeId);
+            const employee = await Employee.findById(employeeId).select("-password -unitHeadPassword");
             if (!employee) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Ishchi topilmadi',
-                });
+                return response.notFound(res, "Ishchi topilmadi");
             }
 
             // Oylik to'lov ma'lumotlarini olish
@@ -39,7 +35,7 @@ class SalaryService {
                     employeeId,
                     month: monthNum,
                     year: yearNum,
-                    status: 'aktiv',
+                    status: "aktiv",
                 });
                 const totalPenalty = penalties.reduce((sum, penalty) => sum + penalty.amount, 0);
 
@@ -59,22 +55,17 @@ class SalaryService {
                 employeeId,
                 month: monthNum,
                 year: yearNum,
-                status: 'aktiv',
+                status: "aktiv",
             }).sort({ appliedDate: -1 });
 
-            return res.json({
-                success: true,
-                data: {
-                    employee,
-                    salaryPayment,
-                    penalties,
-                },
+            return response.success(res, "Ishchi oylik ma'lumotlari", {
+                employee,
+                salaryPayment,
+                penalties,
             });
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            console.error("Get employee salary info error:", error);
+            return response.serverError(res, "Oylik ma'lumotlarini olishda xatolik", error);
         }
     }
 
@@ -85,29 +76,21 @@ class SalaryService {
             const monthNum = parseInt(month);
             const yearNum = parseInt(year);
 
-            if (!employeeId || monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Noto'g'ri employeeId, oy yoki yil",
-                });
+            if (!mongoose.Types.ObjectId.isValid(employeeId) || monthNum < 1 || monthNum > 12 || yearNum < 2020) {
+                return response.error(res, "Noto'g'ri employeeId, oy yoki yil");
             }
 
             const penalties = await Penalty.find({
                 employeeId,
                 month: monthNum,
                 year: yearNum,
-                status: 'aktiv',
+                status: "aktiv",
             }).sort({ appliedDate: -1 });
 
-            return res.json({
-                success: true,
-                data: penalties,
-            });
+            return response.success(res, "Ishchi jarimalari", penalties);
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            console.error("Get employee penalties error:", error);
+            return response.serverError(res, "Jarimalarni olishda xatolik", error);
         }
     }
 
@@ -117,17 +100,14 @@ class SalaryService {
             const { month, year } = req.params;
             const monthNum = parseInt(month);
             const yearNum = parseInt(year);
-            console.log(monthNum, yearNum);
 
             if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Noto'g'ri oy yoki yil",
-                });
+                return response.error(res, "Noto'g'ri oy yoki yil");
             }
 
-            const employees = await Employee.find({ paymentType: 'oylik' })
-                .select('firstName middleName lastName unit position salary passportSeries');
+            const employees = await Employee.find({ paymentType: "oylik" }).select(
+                "firstName middleName lastName unit role salary passportSeries"
+            );
 
             const salaryInfoPromises = employees.map(async (employee) => {
                 const salaryInfo = await this.getEmployeeSalaryInfoInternal(employee._id, monthNum, yearNum);
@@ -140,23 +120,18 @@ class SalaryService {
 
             const employeesData = await Promise.all(salaryInfoPromises);
 
-            return res.json({
-                success: true,
-                data: employeesData,
-            });
+            return response.success(res, "Barcha ishchilarning oylik ma'lumotlari", employeesData);
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            console.error("Get all employees salary info error:", error);
+            return response.serverError(res, "Barcha oylik ma'lumotlarini olishda xatolik", error);
         }
     }
 
     // Internal helper for getAllEmployeesSalaryInfo
     async getEmployeeSalaryInfoInternal(employeeId, month, year) {
-        const employee = await Employee.findById(employeeId);
+        const employee = await Employee.findById(employeeId).select("-password -unitHeadPassword");
         if (!employee) {
-            throw new Error('Ishchi topilmadi');
+            throw new Error("Ishchi topilmadi");
         }
 
         let salaryPayment = await SalaryPayment.findOne({
@@ -170,7 +145,7 @@ class SalaryService {
                 employeeId,
                 month,
                 year,
-                status: 'aktiv',
+                status: "aktiv",
             });
             const totalPenalty = penalties.reduce((sum, penalty) => sum + penalty.amount, 0);
 
@@ -190,7 +165,7 @@ class SalaryService {
             employeeId,
             month,
             year,
-            status: 'aktiv',
+            status: "aktiv",
         }).sort({ appliedDate: -1 });
 
         return {
@@ -203,20 +178,14 @@ class SalaryService {
     // Maosh to'lash
     async paySalary(req, res) {
         try {
-            const { employeeId, month, year, amount, paymentMethod, description = '' } = req.body;
+            const { employeeId, month, year, amount, paymentMethod, description = "" } = req.body;
 
             if (!employeeId || !month || !year || !amount || !paymentMethod) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Barcha majburiy maydonlar to'ldirilishi kerak",
-                });
+                return response.error(res, "Barcha majburiy maydonlar to'ldirilishi kerak");
             }
 
-            if (parseFloat(amount) <= 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: "To'lov summasi 0 dan katta bo'lishi kerak",
-                });
+            if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+                return response.error(res, "Noto'g'ri employeeId");
             }
 
             const monthNum = parseInt(month);
@@ -224,18 +193,16 @@ class SalaryService {
             const paymentAmount = parseFloat(amount);
 
             if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Noto'g'ri oy yoki yil",
-                });
+                return response.error(res, "Noto'g'ri oy yoki yil");
             }
 
-            const employee = await Employee.findById(employeeId);
+            if (paymentAmount <= 0) {
+                return response.error(res, "To'lov summasi 0 dan katta bo'lishi kerak");
+            }
+
+            const employee = await Employee.findById(employeeId).select("-password -unitHeadPassword");
             if (!employee) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Ishchi topilmadi',
-                });
+                return response.notFound(res, "Ishchi topilmadi");
             }
 
             let salaryPayment = await SalaryPayment.findOne({
@@ -249,7 +216,7 @@ class SalaryService {
                     employeeId,
                     month: monthNum,
                     year: yearNum,
-                    status: 'aktiv',
+                    status: "aktiv",
                 });
                 const totalPenalty = penalties.reduce((sum, penalty) => sum + penalty.amount, 0);
 
@@ -267,9 +234,9 @@ class SalaryService {
             // Expense yozuvini yaratish
             const expense = new Expense({
                 relatedId: employeeId.toString(),
-                type: 'chiqim',
+                type: "chiqim",
                 paymentMethod,
-                category: 'oylik_maosh',
+                category: "oylik_maosh",
                 amount: paymentAmount,
                 description: `${employee.firstName} ${employee.lastName} - ${monthNum}/${yearNum} oy maoshi: ${description}`,
                 date: new Date(),
@@ -293,29 +260,23 @@ class SalaryService {
             // Status yangilash
             if (salaryPayment.remainingAmount <= 0) {
                 if (salaryPayment.remainingAmount < 0) {
-                    salaryPayment.status = 'ortiqcha_to\'langan';
+                    salaryPayment.status = "ortiqcha_to'langan";
                     // Ortiqcha to'langan summani keyingi oyga o'tkazish
                     await this.handleOverpaymentInternal(employeeId, monthNum, yearNum, Math.abs(salaryPayment.remainingAmount));
                 } else {
-                    salaryPayment.status = 'to\'liq_to\'langan';
+                    salaryPayment.status = "to'liq_to'langan";
                 }
             }
 
             await salaryPayment.save();
 
-            return res.json({
-                success: true,
-                message: "To'lov muvaffaqiyatli amalga oshirildi",
-                data: {
-                    salaryPayment,
-                    expense: savedExpense,
-                },
+            return response.success(res, "To'lov muvaffaqiyatli amalga oshirildi", {
+                salaryPayment,
+                expense: savedExpense,
             });
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            console.error("Pay salary error:", error);
+            return response.serverError(res, "Maosh to'lashda xatolik", error);
         }
     }
 
@@ -325,17 +286,11 @@ class SalaryService {
             const { employeeId, month, year, overpaidAmount } = req.body;
 
             if (!employeeId || !month || !year || !overpaidAmount) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Barcha majburiy maydonlar to'ldirilishi kerak",
-                });
+                return response.error(res, "Barcha majburiy maydonlar to'ldirilishi kerak");
             }
 
-            if (parseFloat(overpaidAmount) <= 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Ortiqcha to'lov summasi 0 dan katta bo'lishi kerak",
-                });
+            if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+                return response.error(res, "Noto'g'ri employeeId");
             }
 
             const monthNum = parseInt(month);
@@ -343,24 +298,19 @@ class SalaryService {
             const overpaid = parseFloat(overpaidAmount);
 
             if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Noto'g'ri oy yoki yil",
-                });
+                return response.error(res, "Noto'g'ri oy yoki yil");
+            }
+
+            if (overpaid <= 0) {
+                return response.error(res, "Ortiqcha to'lov summasi 0 dan katta bo'lishi kerak");
             }
 
             const result = await this.handleOverpaymentInternal(employeeId, monthNum, yearNum, overpaid);
 
-            return res.json({
-                success: true,
-                message: "Ortiqcha to'lov muvaffaqiyatli o'tkazildi",
-                data: result,
-            });
+            return response.success(res, "Ortiqcha to'lov muvaffaqiyatli o'tkazildi", result);
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            console.error("Handle overpayment error:", error);
+            return response.serverError(res, "Ortiqcha to'lovni o'tkazishda xatolik", error);
         }
     }
 
@@ -375,9 +325,9 @@ class SalaryService {
                 nextYear += 1;
             }
 
-            const employee = await Employee.findById(employeeId);
+            const employee = await Employee.findById(employeeId).select("-password -unitHeadPassword");
             if (!employee) {
-                throw new Error('Ishchi topilmadi');
+                throw new Error("Ishchi topilmadi");
             }
 
             let nextMonthSalary = await SalaryPayment.findOne({
@@ -391,7 +341,7 @@ class SalaryService {
                     employeeId,
                     month: nextMonth,
                     year: nextYear,
-                    status: 'aktiv',
+                    status: "aktiv",
                 });
                 const totalPenalty = penalties.reduce((sum, penalty) => sum + penalty.amount, 0);
 
@@ -408,7 +358,7 @@ class SalaryService {
 
                 nextMonthSalary.paymentHistory.push({
                     amount: overpaidAmount,
-                    paymentMethod: 'transfer',
+                    paymentMethod: "transfer",
                     description: `${currentMonth}/${currentYear} oydan o'tkazilgan ortiqcha to'lov`,
                     paymentDate: new Date(),
                 });
@@ -421,7 +371,7 @@ class SalaryService {
 
                 nextMonthSalary.paymentHistory.push({
                     amount: overpaidAmount,
-                    paymentMethod: 'transfer',
+                    paymentMethod: "transfer",
                     description: `${currentMonth}/${currentYear} oydan o'tkazilgan ortiqcha to'lov`,
                     paymentDate: new Date(),
                 });
@@ -431,7 +381,7 @@ class SalaryService {
 
             return nextMonthSalary;
         } catch (error) {
-            console.error("Ortiqcha to'lovni o'tkazishda xatolik:", error);
+            console.error("Handle overpayment internal error:", error);
             throw error;
         }
     }
@@ -442,17 +392,11 @@ class SalaryService {
             const { employeeId, amount, reason, penaltyType, month, year, createdBy } = req.body;
 
             if (!employeeId || !amount || !reason || !month || !year || !createdBy) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Barcha majburiy maydonlar to'ldirilishi kerak",
-                });
+                return response.error(res, "Barcha majburiy maydonlar to'ldirilishi kerak");
             }
 
-            if (parseFloat(amount) <= 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Jarima summasi 0 dan katta bo'lishi kerak",
-                });
+            if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+                return response.error(res, "Noto'g'ri employeeId");
             }
 
             const monthNum = parseInt(month);
@@ -460,29 +404,35 @@ class SalaryService {
             const penaltyAmount = parseFloat(amount);
 
             if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Noto'g'ri oy yoki yil",
-                });
+                return response.error(res, "Noto'g'ri oy yoki yil");
+            }
+
+            if (penaltyAmount <= 0) {
+                return response.error(res, "Jarima summasi 0 dan katta bo'lishi kerak");
+            }
+
+            const employee = await Employee.findById(employeeId);
+            if (!employee) {
+                return response.notFound(res, "Ishchi topilmadi");
             }
 
             const penaltyData = {
                 employeeId,
                 amount: penaltyAmount,
                 reason,
-                penaltyType: penaltyType || 'boshqa',
+                penaltyType: penaltyType || "boshqa",
                 month: monthNum,
                 year: yearNum,
                 createdBy,
                 appliedDate: new Date(),
-                status: 'aktiv',
+                status: "aktiv",
             };
 
             const penalty = new Penalty(penaltyData);
             await penalty.save();
 
             // Tegishli oylik ma'lumotlarni yangilash
-            const salaryPayment = await SalaryPayment.findOne({
+            let salaryPayment = await SalaryPayment.findOne({
                 employeeId,
                 month: monthNum,
                 year: yearNum,
@@ -494,16 +444,10 @@ class SalaryService {
                 await salaryPayment.save();
             }
 
-            return res.json({
-                success: true,
-                message: "Jarima muvaffaqiyatli qo'shildi",
-                data: penalty,
-            });
+            return response.success(res, "Jarima muvaffaqiyatli qo'shildi", penalty);
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            console.error("Add penalty error:", error);
+            return response.serverError(res, "Jarima qo'shishda xatolik", error);
         }
     }
 
@@ -515,39 +459,31 @@ class SalaryService {
             const yearNum = parseInt(year);
 
             if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Noto'g'ri oy yoki yil",
-                });
+                return response.error(res, "Noto'g'ri oy yoki yil");
             }
 
             const salaryPayments = await SalaryPayment.find({ month: monthNum, year: yearNum })
-                .populate('employeeId', 'firstName middleName lastName unit position')
-                .sort({ 'employeeId.firstName': 1 });
+                .populate("employeeId", "firstName middleName lastName unit role")
+                .sort({ "employeeId.firstName": 1 });
 
             const totalBaseSalary = salaryPayments.reduce((sum, payment) => sum + payment.baseSalary, 0);
             const totalPaid = salaryPayments.reduce((sum, payment) => sum + payment.totalPaid, 0);
             const totalPenalties = salaryPayments.reduce((sum, payment) => sum + payment.penaltyAmount, 0);
             const totalRemaining = salaryPayments.reduce((sum, payment) => sum + payment.remainingAmount, 0);
 
-            return res.json({
-                success: true,
-                data: {
-                    salaryPayments,
-                    summary: {
-                        totalBaseSalary,
-                        totalPaid,
-                        totalPenalties,
-                        totalRemaining,
-                        employeeCount: salaryPayments.length,
-                    },
+            return response.success(res, "Oylik hisobot", {
+                salaryPayments,
+                summary: {
+                    totalBaseSalary,
+                    totalPaid,
+                    totalPenalties,
+                    totalRemaining,
+                    employeeCount: salaryPayments.length,
                 },
             });
         } catch (error) {
-            return res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            console.error("Get monthly salary report error:", error);
+            return response.serverError(res, "Oylik hisobotini olishda xatolik", error);
         }
     }
 }

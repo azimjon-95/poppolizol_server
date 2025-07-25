@@ -199,10 +199,9 @@ class DebtController {
             if (!combinedDebts.length) {
                 return response.notFound(res, "Hech qanday qarz topilmadi");
             }
-            console.log(combinedDebts);
+
             return response.success(res, "Qarzlar muvaffaqiyatli olindi", combinedDebts);
         } catch (error) {
-            console.error("Qarzlarni olishda xatolik:", error);
             return response.serverError(res, "Qarzlarni olishda server xatosi", { error: error.message });
         }
     }

@@ -170,7 +170,6 @@ class ProductionSystem {
       });
     } catch (error) {
       await session.abortTransaction();
-      console.log("Production error:", error);
       return response.error(res, "❌ Ishlab chiqarish xatolikka uchradi", error.message);
     } finally {
       session.endSession();
@@ -561,7 +560,7 @@ class ProductionSystem {
   async getInventory(req, res) {
     try {
       const inventory = await Inventory.find();
-      console.log(inventory);
+
       if (!inventory) {
         return response.notFound(res, "Inventory not found");
       }

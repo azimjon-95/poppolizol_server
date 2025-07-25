@@ -17,29 +17,6 @@ const EmployeeSchema = new mongoose.Schema(
       required: [true, "Familya kiritilishi shart"],
       trim: true,
     },
-    department: {
-      type: String,
-      required: [true, "Bo'lim kiritilishi shart"],
-      enum: [
-        "ishlab_chiqarish",
-        "sifat_nazorati",
-        "saler_meneger",
-        "ombor",
-        "buxgalteriya",
-        "elektrik",
-        "transport",
-        "xavfsizlik",
-        "tozalash",
-        "oshxona",
-        "Sotuvchi",
-      ],
-      default: "ishlab_chiqarish",
-    },
-    position: {
-      type: String,
-      required: [true, "Lavozim kiritilishi shart"],
-      trim: true,
-    },
     experience: {
       type: String,
       trim: true,
@@ -71,8 +48,6 @@ const EmployeeSchema = new mongoose.Schema(
     },
     salary: {
       type: Number,
-      required: [true, "Maosh kiritilishi shart"],
-      min: [0, "Maosh manfiy bo'lishi mumkin emas"],
     },
     isOfficeWorker: {
       type: Boolean,
@@ -86,19 +61,50 @@ const EmployeeSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    role: {
-      type: String,
-      default: "",
-    },
     plans: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Plan",
       },
     ],
+    role: {
+      type: String,
+      enum: [
+        "ofis xodimi",
+        "ishlab chiqarish",
+        "boshqa ishchilar"
+      ],
+      default: "boshqa ishchilar",
+
+    },
     unit: {
       type: String,
-      enum: ["polizol", "rubiroid", "ochisleniya", "boshqa"],
+      enum: [
+        "direktor",
+        "buxgalteriya",
+        "menejir",
+        "ombor",
+        "sifat nazorati",
+
+        "elektrik",
+        "transport",
+        "xavfsizlik",
+        "tozalash",
+        "oshxona",
+
+        "sotuvchi",
+        "sotuvchi eksport",
+        "sotuvchi menejir",
+
+        "polizol",
+        "polizol ish boshqaruvchi",
+        "rubiroid",
+        "rubiroid ish boshqaruvchi",
+        "ochisleniya",
+        "ochisleniya ish boshqaruvchi",
+
+        "boshqa"
+      ],
       default: "boshqa",
     },
     unitHeadPassword: {
@@ -110,3 +116,5 @@ const EmployeeSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("Admins", EmployeeSchema);
+
+

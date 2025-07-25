@@ -6,7 +6,6 @@ const Material = require("../model/wherehouseModel");
 const Balance = require("../model/balance");
 const Debt = require("../model/debtSchema");
 const Expense = require("../model/expenseModel");
-const ProductionHistory = require("../model/ProductionHistoryModel");
 const FinishedProduct = require("../model/finishedProductModel"); // Assuming a FinishedProduct model exists
 const response = require("../utils/response");
 
@@ -137,6 +136,7 @@ class DashboardController {
                 const sId = plan.employeeId?._id?.toString();
                 const actual = salesBySaler[sId]?.total || 0;
                 const count = salesBySaler[sId]?.count || 0;
+
                 const percent = plan.targetAmount > 0 ? Math.round((actual / plan.targetAmount) * 100) : 0;
                 return {
                     name: `${plan.employeeId.firstName} ${plan.employeeId.lastName}`,

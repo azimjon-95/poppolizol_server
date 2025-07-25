@@ -121,7 +121,6 @@ class ExpenseController {
     try {
       const { id } = req.params;
       const expense = await Expense.findOne({ _id: id });
-      console.log(id);
       if (!expense) {
         return response.notFound(res, 'Transaksiya topilmadi');
       }

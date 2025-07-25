@@ -1,13 +1,14 @@
-const response = require("../utils/response");
+const mongoose = require("mongoose");
 const Employee = require("../model/adminModel"); // Assuming the EmployeeSchema is exported as Employee model
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const response = require("../utils/response");
 
 class AdminController {
   // Barcha xodimlarni olish (Read - All)
   async getEmployees(req, res) {
     try {
-      const employees = await Employee.find().select("-password"); // Parolni chiqarmaslik uchun
+      const employees = await Employee.find().select("-password -unitHeadPassword");
       if (!employees.length)
         return response.notFound(res, "Xodimlar topilmadi");
       response.success(res, "Barcha xodimlar", employees);
@@ -20,7 +21,7 @@ class AdminController {
   async getEmployeeById(req, res) {
     try {
       const employee = await Employee.findById(req.params.id).select(
-        "-password"
+        "-password -unitHeadPassword"
       );
       if (!employee) return response.notFound(res, "Xodim topilmadi");
       response.success(res, "Xodim topildi", employee);
@@ -33,10 +34,10 @@ class AdminController {
   async createEmployee(req, res) {
     try {
       let io = req.app.get("socket");
-      const { login, password, isOfficeWorker } = req.body;
+      const { login, password, isOfficeWorker, unit, unitHeadPassword } = req.body;
 
       // Login takrorlanmasligini tekshirish (faqat ofis xodimlari uchun)
-      if (isOfficeWorker && login) {
+      if (login) {
         const existingEmployee = await Employee.findOne({ login });
         if (existingEmployee) {
           return response.error(res, "Bu login allaqachon mavjud");
@@ -44,10 +45,22 @@ class AdminController {
       }
 
       // Parolni shifrlash (faqat ofis xodimlari uchun)
-      if (isOfficeWorker && password) {
+      if (password) {
         req.body.password = await bcrypt.hash(password, 10);
       } else {
-        req.body.password = ""; // Agar ofis xodimi bo'lmasa, parol bo'sh
+        req.body.password = "";
+      }
+
+      // unitHeadPassword ni shifrlash (agar berilgan bo'lsa va unit mos bo'lsa)
+      const managerialUnits = [
+        "polizol ish boshqaruvchi",
+        "rubiroid ish boshqaruvchi",
+        "ochisleniya ish boshqaruvchi",
+      ];
+      if (managerialUnits.includes(unit) && unitHeadPassword) {
+        req.body.unitHeadPassword = await bcrypt.hash(unitHeadPassword, 10);
+      } else if (!managerialUnits.includes(unit)) {
+        req.body.unitHeadPassword = "";
       }
 
       // Xodimni yaratish
@@ -55,7 +68,8 @@ class AdminController {
 
       // Xodimni javobga tayyorlash
       const employeeData = employee.toJSON();
-      delete employeeData.password; // Parolni javobdan olib tashlash
+      delete employeeData.password;
+      delete employeeData.unitHeadPassword;
 
       // Yangi xodim qo'shilganda socket orqali xabar yuborish
       io.emit("new_employee", employeeData);
@@ -71,7 +85,7 @@ class AdminController {
   async updateEmployee(req, res) {
     try {
       let io = req.app.get("socket");
-      const { login, password, isOfficeWorker } = req.body;
+      const { login, password, isOfficeWorker, unit, unitHeadPassword } = req.body;
 
       // Login takrorlanmasligini tekshirish (faqat ofis xodimlari uchun)
       if (isOfficeWorker && login) {
@@ -85,13 +99,26 @@ class AdminController {
       }
 
       const updateData = { ...req.body };
+
       // Parolni yangilash (faqat ofis xodimlari uchun va agar parol berilgan bo'lsa)
       if (isOfficeWorker && password) {
         updateData.password = await bcrypt.hash(password, 10);
       } else if (!isOfficeWorker) {
-        updateData.password = ""; // Agar ofis xodimi bo'lmasa, parol bo'sh
-        updateData.login = ""; // Login ham bo'sh
-        updateData.role = ""; // Rol ham bo'sh
+        updateData.password = "";
+        updateData.login = "";
+        updateData.role = "";
+      }
+
+      // unitHeadPassword ni yangilash (agar unit mos bo'lsa va unitHeadPassword berilgan bo'lsa)
+      const managerialUnits = [
+        "polizol ish boshqaruvchi",
+        "rubiroid ish boshqaruvchi",
+        "ochisleniya ish boshqaruvchi",
+      ];
+      if (managerialUnits.includes(unit) && unitHeadPassword) {
+        updateData.unitHeadPassword = await bcrypt.hash(unitHeadPassword, 10);
+      } else if (!managerialUnits.includes(unit)) {
+        updateData.unitHeadPassword = "";
       }
 
       const updatedEmployee = await Employee.findByIdAndUpdate(
@@ -105,6 +132,7 @@ class AdminController {
 
       const employeeData = updatedEmployee.toJSON();
       delete employeeData.password;
+      delete employeeData.unitHeadPassword;
 
       io.emit("employee_updated", employeeData);
       response.success(res, "Xodim yangilandi", employeeData);
@@ -122,6 +150,7 @@ class AdminController {
 
       const employeeData = employee.toJSON();
       delete employeeData.password;
+      delete employeeData.unitHeadPassword;
 
       io.emit("employee_deleted", employeeData);
       response.success(res, "Xodim o'chirildi");
@@ -146,13 +175,14 @@ class AdminController {
       if (!isMatch) return response.error(res, "Login yoki parol xato");
 
       const token = jwt.sign(
-        { id: employee._id, login: employee.login },
+        { id: employee._id, login: employee.login, isOfficeWorker: employee.isOfficeWorker },
         process.env.JWT_SECRET_KEY,
         { expiresIn: "1w" }
       );
 
       const employeeData = employee.toJSON();
       delete employeeData.password;
+      delete employeeData.unitHeadPassword;
 
       response.success(res, "Kirish muvaffaqiyatli", {
         employee: employeeData,
@@ -163,29 +193,46 @@ class AdminController {
     }
   }
 
+  // Bo'lim boshlig'i pinCode orqali kirishi
   async loginUnitHead(req, res) {
     try {
-      const { pin } = req.body;
+      const { pinCode } = req.body;
 
-      if (!pin) {
-        return response.warning(res, "Parol kiritilishi shart");
+      if (!pinCode) {
+        return response.warning(res, "PinCode kiritilishi shart");
       }
 
-      const unitHead = await Employee.findOne({ unitHeadPassword: pin });
+      // PinCode (unitHeadPassword) bo'yicha xodimni qidirish
+      const unitHead = await Employee.findOne({ unitHeadPassword: { $exists: true, $ne: "" } });
 
       if (!unitHead) {
-        return response.error(
-          res,
-          "Parol noto‘g‘ri yoki foydalanuvchi topilmadi"
-        );
+        return response.error(res, "PinCode noto‘g‘ri yoki foydalanuvchi topilmadi");
       }
 
+      // PinCode ni tekshirish
+      const isMatch = await bcrypt.compare(pinCode, unitHead.unitHeadPassword);
+      if (!isMatch) {
+        return response.error(res, "PinCode noto‘g‘ri");
+      }
+
+      // Unit ni tekshirish
+      const managerialUnits = [
+        "polizol ish boshqaruvchi",
+        "rubiroid ish boshqaruvchi",
+        "ochisleniya ish boshqaruvchi",
+      ];
+      if (!managerialUnits.includes(unitHead.unit)) {
+        return response.error(res, "Bu xodim bo‘lim boshlig‘i emas");
+      }
+
+      // JWT token yaratish
       const token = jwt.sign(
-        { id: unitHead._id, login: unitHead.login },
+        { id: unitHead._id, login: unitHead.login, unit: unitHead.unit },
         process.env.JWT_SECRET_KEY,
         { expiresIn: "1w" }
       );
 
+      // Xodim ma'lumotlarini tayyorlash
       const unitHeadData = unitHead.toJSON();
       delete unitHeadData.password;
       delete unitHeadData.unitHeadPassword;
@@ -198,6 +245,35 @@ class AdminController {
       response.serverError(res, err.message, err);
     }
   }
+
+
+  async ochisleniyaEmployees(req, res) {
+    console.log("ok");
+    try {
+      const employees = await Employee.find({
+        unit: {
+          $in: ['ochisleniya', 'ochisleniya ish boshqaruvchi']
+        }
+      }).select('-unitHeadPassword');
+
+      if (!employees || employees.length === 0) {
+        return response.notFound(res, "No employees found with specified units");
+      }
+
+      return response.success(res, "Employees retrieved successfully", {
+        count: employees.length,
+        employees
+      });
+    } catch (error) {
+
+      return response.serverError(res, "Server error", { error: error.message });
+    }
+  };
 }
 
 module.exports = new AdminController();
+
+
+
+
+
