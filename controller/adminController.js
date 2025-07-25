@@ -196,9 +196,8 @@ class AdminController {
   // Bo'lim boshlig'i pinCode orqali kirishi
   async loginUnitHead(req, res) {
     try {
-      const { pinCode } = req.body;
-
-      if (!pinCode) {
+      const { pin } = req.body;
+      if (!pin) {
         return response.warning(res, "PinCode kiritilishi shart");
       }
 
@@ -206,11 +205,11 @@ class AdminController {
       const unitHead = await Employee.findOne({ unitHeadPassword: { $exists: true, $ne: "" } });
 
       if (!unitHead) {
-        return response.error(res, "PinCode noto‘g‘ri yoki foydalanuvchi topilmadi");
+        return response.error(res, "pin noto‘g‘ri yoki foydalanuvchi topilmadi");
       }
 
       // PinCode ni tekshirish
-      const isMatch = await bcrypt.compare(pinCode, unitHead.unitHeadPassword);
+      const isMatch = await bcrypt.compare(pin, unitHead.unitHeadPassword);
       if (!isMatch) {
         return response.error(res, "PinCode noto‘g‘ri");
       }
@@ -248,7 +247,7 @@ class AdminController {
 
 
   async ochisleniyaEmployees(req, res) {
-    console.log("ok");
+
     try {
       const employees = await Employee.find({
         unit: {
