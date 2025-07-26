@@ -98,6 +98,7 @@ const employeeValidation = (req, res, next) => {
           "sifat nazorati",
           "elektrik",
           "transport",
+          "avto kara",
           "xavfsizlik",
           "tozalash",
           "oshxona",

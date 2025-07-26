@@ -268,6 +268,21 @@ class AdminController {
       return response.serverError(res, "Server error", { error: error.message });
     }
   };
+
+
+  async getProductionEmployees(req, res) {
+    try {
+      const productionEmployees = await Employee.find({ role: "ishlab chiqarish" });
+
+      if (!productionEmployees.length) {
+        return response.serverError(res, "Ishlab chiqarish xodimlari topilmadi");
+      }
+
+      return response.success(res, "Employees retrieved successfully", productionEmployees);
+    } catch (error) {
+      return response.serverError(res, "Server error", { error: error.message });
+    }
+  }
 }
 
 module.exports = new AdminController();

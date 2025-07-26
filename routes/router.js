@@ -24,11 +24,10 @@ router.get("/salary/getAll", salaryController.getAll);
 
 // attendance routes
 router.post("/attendance", attendanceController.markAttendance);
-
 router.get("/attendance", attendanceController.getAttendanceHistory);
-
 router.get("/attendance/all", attendanceController.getAllAttendanceByDateRange);
-
+router.put("/attendance", attendanceController.updateAttendance);
+router.delete("/attendance", attendanceController.deleteAttendance);
 /**
  * ============================
  * Material Routes
@@ -101,6 +100,7 @@ router.post("/admin/create", adminValidation, adminController.createEmployee);
 router.get("/admin/all", adminController.getEmployees);
 router.get("/admin/:id", adminController.getEmployeeById);
 router.get("/ochisleniya", adminController.ochisleniyaEmployees);
+router.get("/productionEmployees", adminController.getProductionEmployees);
 router.put(
   "/admin/update/:id",
   adminValidation,

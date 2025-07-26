@@ -88,6 +88,7 @@ const EmployeeSchema = new mongoose.Schema(
 
         "elektrik",
         "transport",
+        "avto kara",
         "xavfsizlik",
         "tozalash",
         "oshxona",
