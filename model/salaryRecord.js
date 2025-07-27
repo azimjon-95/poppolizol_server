@@ -25,7 +25,7 @@ const SalaryRecordSchema = new Schema(
     },
     department: {
       type: String,
-      enum: ["polizol", "bt_3", "bt_5"], // mumkin bo‘lsa boshqa bo‘limlar ham qo‘shiladi
+      enum: ["polizol", "ochisleniya", "bt_5"], // mumkin bo‘lsa boshqa bo‘limlar ham qo‘shiladi
       required: true,
     },
     producedCount: {

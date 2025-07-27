@@ -2,44 +2,59 @@ const mongoose = require("mongoose");
 const Attendance = require("../model/attendanceModal");
 const Admins = require("../model/adminModel");
 const response = require("../utils/response");
+const {
+  recalculatePolizolSalaries,
+} = require("../controller/calculateSalary/calculatePolizol");
 
 class AttendanceController {
   async markAttendance(req, res) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
       const { employeeId, date, percentage, department: unit } = req.body;
 
       if (!unit) {
+        await session.abortTransaction();
+        session.endSession();
         return response.warning(res, "Bo‘lim tanlanmagan");
       }
 
       if (!employeeId || !date || !percentage) {
+        await session.abortTransaction();
+        session.endSession();
         return response.warning(res, "Majburiy maydonlar to'ldirilmagan");
       }
 
       const allowedPercentages = [0.33, 0.5, 0.75, 1, 1.5, 2];
       if (!allowedPercentages.includes(percentage)) {
+        await session.abortTransaction();
+        session.endSession();
         return response.warning(res, "Noto'g'ri davomat foizi kiritildi");
       }
 
-      // Validate employeeId
       if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+        await session.abortTransaction();
+        session.endSession();
         return response.error(res, "Noto'g'ri xodim ID si");
       }
 
-      // Check if employee exists and get their unit
-      const user = await Admins.findById(employeeId);
+      const user = await Admins.findById(employeeId).session(session);
       if (!user) {
+        await session.abortTransaction();
+        session.endSession();
         return response.error(res, "Xodim topilmadi");
       }
 
-      // Check if the provided unit matches the employee's unit
       if (user.role !== "ishlab chiqarish") {
-        return response.error(res, "Kiritilgan bo‘lim xodimning bo‘limiga mos kelmaydi");
+        await session.abortTransaction();
+        session.endSession();
+        return response.error(
+          res,
+          "Kiritilgan bo‘lim xodimning bo‘limiga mos kelmaydi"
+        );
       }
 
       let realPercentage = percentage;
-
-      // Apply bonus for managerial units
       const managerialUnits = [
         "polizol ish boshqaruvchi",
         "rubiroid ish boshqaruvchi",
@@ -49,33 +64,36 @@ class AttendanceController {
         realPercentage = +(Number(percentage) + 0.2).toFixed(2);
       }
 
-      // Special handling for transport unit
+      let attendanceRecord;
       if (user.unit === "avto kara") {
-        const attendanceRecord = await Attendance.create({
-          employee: employeeId,
-          date: new Date(date),
-          percentage,
-          unit,
-        });
-
-        return response.success(
-          res,
-          "Davomat muvaffaqiyatli saqlandi",
-          attendanceRecord
+        attendanceRecord = await Attendance.create(
+          [
+            {
+              employee: employeeId,
+              date: new Date(date),
+              percentage,
+              unit,
+            },
+          ],
+          { session }
         );
+        await recalculatePolizolSalaries(date, session);
+      } else {
+        attendanceRecord = await Attendance.findOneAndUpdate(
+          { employee: employeeId, date: new Date(date) },
+          {
+            employee: employeeId,
+            date: new Date(date),
+            percentage: realPercentage,
+            unit,
+          },
+          { upsert: true, new: true, session }
+        );
+        await recalculatePolizolSalaries(date, session);
       }
 
-      // Upsert attendance record for non-transport units
-      const attendanceRecord = await Attendance.findOneAndUpdate(
-        { employee: employeeId, date: new Date(date) },
-        {
-          employee: employeeId,
-          date: new Date(date),
-          percentage: realPercentage,
-          unit,
-        },
-        { upsert: true, new: true }
-      );
+      await session.commitTransaction();
+      session.endSession();
 
       return response.success(
         res,
@@ -83,8 +101,14 @@ class AttendanceController {
         attendanceRecord
       );
     } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
       console.error("Mark attendance error:", error);
-      return response.serverError(res, "Davomatni saqlashda xatolik yuz berdi", error);
+      return response.serverError(
+        res,
+        "Davomatni saqlashda xatolik yuz berdi",
+        error
+      );
     }
   }
 
@@ -135,14 +159,19 @@ class AttendanceController {
         return response.error(res, "Noto'g'ri bo‘lim kiritildi");
       }
 
-      const attendance = await Attendance.findById(attendanceId).populate('employee');
+      const attendance = await Attendance.findById(attendanceId).populate(
+        "employee"
+      );
       if (!attendance) {
         return response.error(res, "Davomat topilmadi");
       }
 
       // Check if the provided unit matches the employee's unit
       if (attendance.employee.unit !== unit) {
-        return response.error(res, "Kiritilgan bo‘lim xodimning bo‘limiga mos kelmaydi");
+        return response.error(
+          res,
+          "Kiritilgan bo‘lim xodimning bo‘limiga mos kelmaydi"
+        );
       }
 
       let realPercentage = percentage;
@@ -172,70 +201,52 @@ class AttendanceController {
       );
     } catch (error) {
       console.error("Update attendance error:", error);
-      return response.serverError(res, "Davomatni yangilashda xatolik yuz berdi", error);
+      return response.serverError(
+        res,
+        "Davomatni yangilashda xatolik yuz berdi",
+        error
+      );
     }
   }
 
   async deleteAttendance(req, res) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
       const { attendanceId, unit } = req.body;
 
-      if (!attendanceId) {
-        return response.warning(res, "Davomat ID si kiritilmagan");
-      }
-
       if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
+        await session.abortTransaction();
+        session.endSession();
         return response.error(res, "Noto'g'ri davomat ID si");
       }
 
-      if (!unit) {
-        return response.warning(res, "Bo‘lim kiritilmagan");
-      }
+      let user = await Attendance.findById(attendanceId).session(session);
 
-      const validUnits = [
-        "direktor",
-        "buxgalteriya",
-        "menejir",
-        "ombor",
-        "sifat nazorati",
-        "elektrik",
-        "transport",
-        "xavfsizlik",
-        "tozalash",
-        "oshxona",
-        "avto kara",
-        "sotuvchi",
-        "sotuvchi eksport",
-        "sotuvchi menejir",
-        "polizol",
-        "polizol ish boshqaruvchi",
-        "rubiroid",
-        "rubiroid ish boshqaruvchi",
-        "ochisleniya",
-        "ochisleniya ish boshqaruvchi",
-        "boshqa",
-      ];
-
-      if (!validUnits.includes(unit)) {
-        return response.error(res, "Noto'g'ri bo‘lim kiritildi");
-      }
-
-      const attendance = await Attendance.findById(attendanceId);
-      if (!attendance) {
+      if (!user) {
+        await session.abortTransaction();
+        session.endSession();
         return response.error(res, "Davomat topilmadi");
       }
 
-      // Check if the provided unit matches the attendance record's unit
-      if (unit === "ochisleniya" && attendance.unit !== "ochisleniya") {
-        return response.error(res, "Bu davomat ochisleniya bo‘limiga tegishli emas");
+      await Attendance.findByIdAndDelete(attendanceId).session(session);
+
+      if (user.unit === "polizol") {
+        await recalculatePolizolSalaries(user?.date, session);
       }
 
-      await Attendance.findByIdAndDelete(attendanceId);
-
+      await session.commitTransaction();
+      session.endSession();
       return response.success(res, "Davomat muvaffaqiyatli o'chirildi", null);
     } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
       console.error("Delete attendance error:", error);
-      return response.serverError(res, "Davomatni o'chirishda xatolik yuz berdi", error);
+      return response.serverError(
+        res,
+        "Davomatni o'chirishda xatolik yuz berdi",
+        error
+      );
     }
   }
 
