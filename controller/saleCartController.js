@@ -299,22 +299,18 @@ class SaleController {
         const { productId, quantity } = item;
 
         // 2. Tayyor mahsulotni topib, quantity ni kamaytiramiz
-        const product = await FinishedProduct.findById(productId).session(
-          session
-        );
+        const product = await FinishedProduct.findById(productId).session(session);
         if (!product) {
           return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
         }
 
         if (product.quantity < quantity) {
-          return response.error(
-            res,
-            `Mahsulot yetarli emas: ${product.productName}`
-          );
+          return response.error(res, `Mahsulot yetarli emas: ${product.productName}`);
         }
 
         product.quantity -= quantity;
-        await product.save({ session });
+        // Validate only modified fields to avoid issues with required fields like returnInfo
+        await product.save({ session, validateModifiedOnly: true });
 
         const saleItem = sale.items.find(
           (i) =>
@@ -322,6 +318,10 @@ class SaleController {
             productId &&
             i.productId.toString() === productId.toString()
         );
+
+        if (!saleItem) {
+          return response.error(res, `Sotuvda mahsulot topilmadi: ${productId}`);
+        }
 
         saleItem.deliveredQuantity += quantity;
         saleItem.updatedAt = new Date();
@@ -338,7 +338,6 @@ class SaleController {
       session.endSession();
     }
   }
-
   async getSaleById(req, res) {
     try {
       const { id } = req.params;
@@ -937,119 +936,145 @@ class SaleController {
     }
   }
 
+
   // Process product returns
   async returnItems(req, res) {
+    let session;
     try {
-      const { _id, amount, paymentMethod } = req.query;
+      session = await mongoose.startSession();
+      await session.startTransaction();
 
-      if (_id && amount && paymentMethod) {
-        // Miqdorning to'g'ri ekanligini tekshirish
-        const paymentAmount = parseFloat(amount);
-        if (isNaN(paymentAmount) || paymentAmount <= 0) {
-          return response.error(res, "Noto'g'ri miqdor kiritildi");
-        }
-
-        // To'lov usulini tekshirish
-        if (!["naqt", "bank"].includes(paymentMethod)) {
-          return response.error(
-            res,
-            "Noto'g'ri to'lov usuli. \"naqt\" yoki \"bank\" bo'lishi kerak"
-          );
-        }
-
-        // MongoDB sessiyasi va tranzaksiyasini boshlash
-        const session = await mongoose.startSession();
-        session.startTransaction();
-
-        try {
-          // Transport yozuvini _id bo'yicha sessiya ichida topish
-          const transport = await Transport.findById(_id).session(session);
-          if (!transport) {
-            await session.abortTransaction();
-            session.endSession();
-            return response.notFound(res, "Transport topilmadi");
-          }
-
-          // Transport balansining yetarli ekanligini tekshirish
-          if (transport.balance < paymentAmount) {
-            await session.abortTransaction();
-            session.endSession();
-            return response.error(
-              res,
-              "Transport balansida yetarli mablag' yo'q"
-            );
-          }
-
-          // Balansni yangilash
-          const balance = await Balance.updateBalance(
-            paymentMethod,
-            "chiqim",
-            paymentAmount,
-            session
-          );
-          if (!balance) {
-            await session.abortTransaction();
-            session.endSession();
-            return response.error(
-              res,
-              `${paymentMethod} balansida yetarli mablag\' yo\'q`
-            );
-          }
-
-          // Xarajat yozuvini yaratish
-          const expense = new Expense({
-            relatedId: _id,
-            type: "chiqim",
-            paymentMethod,
-            category: "Transport to'lovi",
-            amount: paymentAmount,
-            description: `Transport ${transport.transport} uchun to\'lov`,
-            date: new Date(),
-          });
-          await expense.save({ session });
-
-          // Transport balansidan miqdorni ayirish
-          transport.balance -= paymentAmount;
-          await transport.save({ session });
-
-          // Tranzaksiyani tasdiqlash
-          await session.commitTransaction();
-          session.endSession();
-
-          return response.success(
-            res,
-            "To'lov muvaffaqiyatli amalga oshirildi",
-            {
-              transport,
-              balance,
-              expense,
-            }
-          );
-        } catch (error) {
-          // Xato yuz bersa tranzaksiyani bekor qilish
-          await session.abortTransaction();
-          session.endSession();
-          console.error("Tranzaksiya xatosi:", error);
-          return response.serverError(
-            res,
-            "Tranzaksiya muvaffaqiyatsiz yakunlandi",
-            error.message
-          );
-        }
-      } else {
-        // Barcha transport yozuvlarini olish (o'qish uchun tranzaksiya kerak emas)
-        const transports = await Transport.find();
-        return response.success(
-          res,
-          "Transportlar muvaffaqiyatli olingan",
-          transports
-        );
+      const { items, customerName, reason, paymentType, description } = req.body.body || req.body;
+      console.log(items, customerName, reason, paymentType, description);
+      if (!items?.length) {
+        return response.error(res, 'Qaytarish uchun mahsulotlar kiritilmadi!');
       }
+      if (!reason) {
+        return response.error(res, 'Qaytarish sababi kiritilmadi!');
+      }
+      if (!['naqt', 'bank'].includes(paymentType)) {
+        return response.error(res, 'To‘lov turi noto‘g‘ri kiritildi!');
+      }
+
+      const sale = await Salecart.findById(req.params.id).session(session);
+      if (!sale) {
+        return response.notFound(res, 'Sotuv topilmadi!');
+      }
+
+      // Calculate totalRefund dynamically
+      let totalRefund = 0;
+
+      for (const returnItem of items) {
+        const { productId, productName, category, quantity } = returnItem;
+        if (!productId || !productName || !category || !quantity) {
+          return response.error(res, 'Mahsulot ma\'lumotlari to‘liq emas!');
+        }
+
+        const originalProduct = await FinishedProduct.findById(productId).session(session);
+        if (!originalProduct) {
+          return response.notFound(res, `Mahsulot topilmadi: ${productName}`);
+        }
+
+        const originalItem = sale.items.find(item => item.productId.toString() === productId);
+        if (!originalItem || quantity > originalItem.quantity) {
+          return response.error(res, `Qaytarish miqdori ${productName} uchun sotuv miqdoridan oshib ketdi!`);
+        }
+
+        const refundForItem = quantity * originalProduct.sellingPrice;
+        totalRefund += refundForItem;
+
+        const returnInfoEntry = {
+          returnReason: reason,
+          returnDescription: description || '',
+          returnDate: new Date(),
+          returnedQuantity: quantity,
+          refundedAmount: refundForItem,
+          companyName: customerName || "Nomalum",
+        };
+
+        // Check for existing returned product
+        const existingReturned = await FinishedProduct.findOne({
+          productName,
+          category,
+          isReturned: true,
+          marketType: originalProduct.marketType,
+          productionDate: originalProduct.productionDate,
+        }).session(session);
+
+        if (existingReturned) {
+          existingReturned.quantity += quantity;
+          existingReturned.returnInfo.push(returnInfoEntry);
+          await existingReturned.save({ session });
+        } else {
+          const newProduct = new FinishedProduct({
+            productName,
+            category,
+            quantity,
+            marketType: originalProduct.marketType,
+            productionDate: originalProduct.productionDate,
+            productionCost: originalProduct.productionCost,
+            sellingPrice: originalProduct.sellingPrice,
+            isReturned: true,
+            returnInfo: [returnInfoEntry],
+          });
+          await newProduct.save({ session });
+        }
+      }
+
+
+
+      await Balance.updateBalance(paymentType, 'chiqim', totalRefund, session);
+
+      const expense = new Expense({
+        relatedId: sale._id.toString(),
+        type: 'chiqim',
+        paymentMethod: paymentType,
+        category: 'Qaytgan mahsulot!',
+        amount: totalRefund,
+        description: `Sababi: ${reason}`,
+        date: new Date(),
+      });
+      await expense.save({ session });
+
+      const newPaidAmount = sale.payment.paidAmount - totalRefund;
+
+      const updatedSale = await Salecart.findByIdAndUpdate(
+        req.params.id,
+        {
+          // $set: {
+          //   'payment.paidAmount': newPaidAmount,
+          //   'payment.debt': sale.payment.totalAmount - newPaidAmount,
+          //   'payment.status': newPaidAmount >= sale.payment.totalAmount ? 'paid' : 'partial',
+          // },
+          $push: {
+            'payment.paymentHistory': {
+              amount: -totalRefund,
+              date: new Date(),
+              description: `Qaytarish: ${reason}`,
+              paidBy: sale.salesperson,
+              paymentType,
+            },
+          },
+        },
+        { new: true, runValidators: true, session }
+      );
+
+      await session.commitTransaction();
+
+      const populatedSale = await Salecart.findById(updatedSale._id)
+        .populate('customerId', 'name type phone companyAddress')
+        .populate('salerId', 'firstName lastName')
+        .lean();
+
+      return response.success(res, 'Mahsulot qaytarish muvaffaqiyatli!', populatedSale);
     } catch (error) {
-      console.error("Server xatosi:", error);
-      return response.serverError(res, "Server xatosi", error.message);
+      if (session?.inTransaction()) await session.abortTransaction();
+      return response.serverError(res, 'Mahsulot qaytarishda xatolik!', error.message);
+    } finally {
+      if (session) await session.endSession();
     }
   }
+
 
   // Get transport records
   // Transport yozuvlarini olish
