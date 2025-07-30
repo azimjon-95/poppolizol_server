@@ -1,4 +1,4 @@
-const Factory = require('../model/factoryModel');
+const { Factory } = require('../model/factoryModel');
 const response = require('../utils/response');
 
 class FactoryConfig {

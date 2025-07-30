@@ -11,6 +11,7 @@ const factoryController = require("../controller/factoryConfigCtrl");
 const ExpenseController = require("../controller/expensesController");
 const SalaryService = require("../controller/SalaryCtrl");
 const SalesController = require("../controller/planSalerController");
+const CategoryProductController = require('../controller/catigory.controller');
 const SaleController = require("../controller/saleCartController"); // Path to your SaleController
 const salaryController = require("../controller/calculateSalary/salaryController");
 // Validations
@@ -113,6 +114,7 @@ router.delete("/admin/delete/:id", adminController.deleteEmployee);
  * Expense Routes
  * ============================
  */
+router.get("/getreports", ExpenseController.getReports);
 router.post("/expense", ExpenseController.createExpense);
 router.get("/expense", ExpenseController.getExpenses);
 router.get("/balance", ExpenseController.getBalance);
@@ -194,6 +196,18 @@ router.get('/debts/history', DebtController.getDebtHistory);
  */
 router.get('/dashboard', DashboardController.getMonthlyDashboard);
 
+
+
+/**
+ * ============================
+ *  Category Routes
+ * ============================
+ */
+router.post('/category', CategoryProductController.create);
+router.get('/category', CategoryProductController.getAll);
+router.get('/category/:id', CategoryProductController.getById);
+router.put('/category/:id', CategoryProductController.update);
+router.delete('/category/:id', CategoryProductController.delete);
 
 
 module.exports = router;

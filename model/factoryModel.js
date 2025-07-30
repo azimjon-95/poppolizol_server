@@ -29,6 +29,32 @@ const factorySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Factory', factorySchema);
 
 
+// ===================productSchema========================
+
+const productSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    unique: true // nomlar unikal bo'lishi kerak
+  },
+  category: {
+    type: String,
+    enum: ['Polizol', 'Folygoizol', 'Ruberoid'],
+    required: true
+  },
+  productionCost: {
+    type: Number,
+    required: true
+  },
+  loadingCost: {
+    type: Number,
+    required: true
+  }
+}, { timestamps: true });
+
+const Product = mongoose.model('Product', productSchema);
+const Factory = mongoose.model('Factory', factorySchema);
+
+module.exports = { Product, Factory };

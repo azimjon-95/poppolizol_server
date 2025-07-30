@@ -1,5 +1,5 @@
 const Norma = require("../model/productNormaSchema");
-const Factory = require("../model/factoryModel");
+const { Factory } = require("../model/factoryModel");
 const Material = require("../model/wherehouseModel");
 const response = require("../utils/response");
 

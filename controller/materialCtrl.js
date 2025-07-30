@@ -340,6 +340,7 @@ class MaterialService {
                 category: { $in: ["BN-3", "BN-5", "Mel", "ip", "kraf", "qop"] },
             });
 
+
             const bn = await FinishedProduct.find({
                 productName: { $in: ["Qop", "Stakan kichik", "Stakan katta"] },
             });

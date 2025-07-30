@@ -559,8 +559,8 @@ class SaleController {
     session.startTransaction();
     try {
       const sale = await Salecart.findById(req.params.id).session(session);
+      // console.log(sale);
       if (!sale) {
-        await session.abortTransaction();
         return response.notFound(res, "Sotuv topilmadi!");
       }
 

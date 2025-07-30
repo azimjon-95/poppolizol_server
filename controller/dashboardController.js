@@ -27,6 +27,8 @@ class DashboardController {
 
             const currentSales = await Salecart.find({ createdAt: { $gte: start, $lte: end } });
             const prevSales = await Salecart.find({ createdAt: { $gte: prevStart, $lte: prevEnd } });
+            const salesDebts = await Salecart.find();
+            const totalDebt = salesDebts.reduce((sum, sale) => sum + sale.payment.debt, 0);
 
             const calculateGrowth = (curr, prev) => {
                 if (prev === 0) return 0;
@@ -36,10 +38,10 @@ class DashboardController {
             const expenses = await Expense.find({ date: { $gte: start, $lte: end } });
             const prevExpenses = await Expense.find({ date: { $gte: prevStart, $lte: prevEnd } });
 
-            const incomeSum = currentSales.reduce((sum, s) => sum + s.payment.paidAmount, 0);
-            const prevIncomeSum = prevSales.reduce((sum, s) => sum + s.payment.paidAmount, 0);
-            const expenseSum = expenses.reduce((sum, e) => sum + e.amount, 0);
-            const prevExpenseSum = prevExpenses.reduce((sum, e) => sum + e.amount, 0);
+            const incomeSum = expenses.filter(i => i.type === "kirim").reduce((sum, e) => sum + e.amount, 0);
+            const expenseSum = expenses.filter(i => i.type === "chiqim").reduce((sum, e) => sum + e.amount, 0);
+            const prevExpenseSum = prevExpenses.filter(i => i.type === "chiqim").reduce((sum, e) => sum + e.amount, 0);
+            const prevIncomeSum = prevExpenses.filter(i => i.type === "kirim").reduce((sum, e) => sum + e.amount, 0);
             const netProfit = incomeSum - expenseSum;
 
             const incomeGrowth = calculateGrowth(incomeSum, prevIncomeSum);
@@ -52,6 +54,12 @@ class DashboardController {
             const finishedProductTotal = await FinishedProduct.aggregate([
                 { $group: { _id: null, total: { $sum: { $multiply: ["$quantity", "$sellingPrice"] } } } }
             ]);
+
+            const incomeDebs = await Income.find();
+            const existingDebts = incomeDebs.filter(income => income.debt.remainingAmount > 0);
+
+            // Calculate total remaining debt
+            const totalRemainingDebt = existingDebts.reduce((sum, income) => sum + income.debt.remainingAmount, 0);
 
             const incomeNds = await Income.aggregate([
                 { $match: { date: { $gte: start, $lte: end } } },
@@ -96,15 +104,20 @@ class DashboardController {
             const dailyIncomeExpense = [];
             for (let day = 1; day <= daysInMonth; day++) {
                 const dateStr = moment(start).date(day).format("YYYY-MM-DD");
-                incomeMap[dateStr] = incomeMap[dateStr] || 0;
-                expenseMap[dateStr] = expenseMap[dateStr] || 0;
+                const startOfDay = moment(dateStr).startOf("day").toDate();
+                const endOfDay = moment(dateStr).endOf("day").toDate();
+
+                // Filter expenses for the specific day and calculate income and expense
+                const dailyExpenses = expenses.filter(e => moment(e.date).isBetween(startOfDay, endOfDay, null, '[]'));
+                const dailyIncome = dailyExpenses.filter(i => i.type === "kirim").reduce((sum, e) => sum + e.amount, 0);
+                const dailyExpense = dailyExpenses.filter(i => i.type === "chiqim").reduce((sum, e) => sum + e.amount, 0);
+
                 dailyIncomeExpense.push({
                     day,
-                    income: incomeMap[dateStr],
-                    expense: expenseMap[dateStr],
+                    income: dailyIncome,
+                    expense: dailyExpense,
                 });
             }
-
             const prevIncomeMap = {};
             prevSales.forEach((s) => {
                 const d = moment(s.createdAt).format("YYYY-MM-DD");
@@ -147,13 +160,15 @@ class DashboardController {
                     avg: count ? Math.round(actual / count) : 0,
                 };
             });
+            const borrowSum = await Debt.aggregate([{ $match: { type: "borrow", status: "active" } }, { $group: { _id: null, total: { $sum: "$remainingAmount" } } }]).then(r => r[0]?.total || 0);
+            const lendSum = await Debt.aggregate([{ $match: { type: "lend", status: "active" } }, { $group: { _id: null, total: { $sum: "$remainingAmount" } } }]).then(r => r[0]?.total || 0)
 
             return response.success(res, "Dashboard data fetched", {
                 period: { from: start, to: end },
                 stats: {
                     balance: await Balance.getBalance(),
-                    lendSum: await Debt.aggregate([{ $match: { type: "lend", status: "active" } }, { $group: { _id: null, total: { $sum: "$remainingAmount" } } }]).then(r => r[0]?.total || 0),
-                    borrowSum: await Debt.aggregate([{ $match: { type: "borrow", status: "active" } }, { $group: { _id: null, total: { $sum: "$remainingAmount" } } }]).then(r => r[0]?.total || 0),
+                    borrowSum: borrowSum + totalRemainingDebt,
+                    lendSum: lendSum + totalDebt,
                     warehouseValue: rawMaterialTotal[0]?.total || 0,
                     finishedProductValue: finishedProductTotal[0]?.total || 0,
                     income: incomeSum,

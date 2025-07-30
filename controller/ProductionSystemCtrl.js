@@ -1,4 +1,5 @@
 const Material = require("../model/wherehouseModel");
+const { Factory } = require("../model/factoryModel");
 const ProductNorma = require("../model/productNormaSchema");
 const FinishedProduct = require("../model/finishedProductModel");
 const ProductionHistory = require("../model/ProductionHistoryModel");
@@ -14,6 +15,192 @@ const {
 } = require("./calculateSalary/calculatePolizol");
 
 class ProductionSystem {
+
+  // async productionProcess(req, res) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     const {
+  //       productNormaId,
+  //       productName,
+  //       quantityToProduce,
+  //       consumedMaterials,
+  //       materialStatistics,
+  //       electricityConsumption,
+  //       gasConsumption,
+  //       marketType = "tashqi",
+  //       isDefective = false,
+  //       defectiveReason = "",
+  //       defectiveDescription = "",
+  //     } = req.body;
+
+  //     const quantity = Number(quantityToProduce);
+  //     if (!productNormaId || !quantity || quantity <= 0) {
+  //       throw new Error("Mahsulot normasi yoki miqdori noto‘g‘ri");
+  //     }
+
+  //     const factoryData = await Factory.find();
+  //     const factoryId = factoryData[0];
+  //     console.log(factoryId.electricityPrice);
+  //     console.log(factoryId.methaneGasPrice);
+
+
+  //     if (!Array.isArray(consumedMaterials) || !Array.isArray(materialStatistics)) {
+  //       throw new Error("Material ma'lumotlari noto‘g‘ri");
+  //     }
+
+  //     if (isDefective && !defectiveReason) {
+  //       throw new Error("Brak mahsulot uchun sabab kiritilishi shart");
+  //     }
+
+  //     const productNorma = await ProductNorma.findById(productNormaId).lean();
+  //     if (!productNorma || !productNorma.cost) {
+  //       throw new Error("Mahsulot normasi topilmadi yoki ishlab chiqarish xarajatlari aniqlanmagan");
+  //     }
+
+  //     const gasCostPerKWH = Number(1200);
+  //     const electricityCostPerKWH = Number(1000);
+  //     const workerPayPerUnit = Number(200);
+  //     const loadingPayPerUnit = Number(150);
+
+  //     const materialsUsed = [];
+  //     let totalMaterialCost = 0;
+
+  //     for (const consumed of consumedMaterials) {
+  //       const material = await Material.findById(consumed.materialId).session(session);
+  //       if (!material) {
+  //         throw new Error(`Material topilmadi: ID ${consumed.materialId}`);
+  //       }
+  //       const consumedQuantity = Number(consumed.quantity || 0);
+  //       const unitPrice = Number(material.price);
+  //       const cost = consumedQuantity * unitPrice;
+  //       totalMaterialCost += cost;
+
+  //       if (Number(material.quantity) < consumedQuantity) {
+  //         throw new Error(`Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`);
+  //       }
+
+  //       material.quantity = Number(material.quantity) - consumedQuantity;
+  //       await material.save({ session });
+
+  //       materialsUsed.push({
+  //         materialId: material._id,
+  //         materialName: material.name,
+  //         quantityUsed: consumedQuantity,
+  //         unitPrice,
+  //       });
+  //     }
+
+
+  //     if (materialStatistics.length !== consumedMaterials.length) {
+  //       throw new Error("Material statistikasi va ishlatilgan materiallar mos emas");
+  //     }
+
+  //     for (const stat of materialStatistics) {
+  //       if (!["exceed", "insufficient", "equal"].includes(stat.status)) {
+  //         throw new Error(`Noto‘g‘ri status: ${stat.status} uchun ${stat.materialName}`);
+  //       }
+  //     }
+
+  //     const totalGasUsed = Number(productNorma.cost?.gas || 0);
+  //     const totalElectricityUsed = Number(productNorma.cost?.electricity || 0);
+  //     const extraCosts = Number(productNorma.cost?.extraCosts || 0);
+
+  //     const totalGasCost = totalGasUsed * gasCostPerKWH;
+  //     const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
+
+  //     const gasPerUnit = totalGasUsed / quantity;
+  //     const electricityPerUnit = totalElectricityUsed / quantity;
+
+  //     const totalWorkerCost = workerPayPerUnit * quantity;
+  //     const totalLoadingCost = loadingPayPerUnit * quantity;
+
+  //     const totalCostSum = totalMaterialCost + totalGasCost + totalElectricityCost + totalWorkerCost + totalLoadingCost + extraCosts;
+  //     const productionCost = totalCostSum / quantity;
+
+  //     const created = await FinishedProduct.create([
+  //       {
+  //         productName: productNorma.productName,
+  //         category: productNorma.category,
+  //         marketType,
+  //         quantity,
+  //         productionCost,
+  //         sellingPrice: Number(productNorma?.salePrice || 0),
+  //         isDefective,
+  //         defectiveInfo: isDefective
+  //           ? {
+  //             defectiveReason,
+  //             defectiveDescription,
+  //             defectiveDate: new Date(),
+  //           }
+  //           : {
+  //             defectiveReason: "",
+  //             defectiveDescription: "",
+  //             defectiveDate: null,
+  //           },
+  //       },
+  //     ], { session });
+
+  //     const finishedProduct = created[0];
+
+  //     await ProductionHistory.create([
+  //       {
+  //         productNormaId: productNorma._id,
+  //         productName: productNorma.productName,
+  //         quantityProduced: quantity,
+  //         materialsUsed,
+  //         materialStatistics,
+  //         totalCost: totalCostSum,
+  //         marketType,
+  //         gasAmount: gasPerUnit * quantity,
+  //         electricity: electricityPerUnit * quantity,
+  //         isDefective,
+  //         salePrice: Number(productNorma.salePrice),
+  //         defectiveInfo: isDefective
+  //           ? {
+  //             defectiveReason,
+  //             defectiveDescription,
+  //             defectiveDate: new Date(),
+  //           }
+  //           : undefined,
+  //       },
+  //     ], { session });
+
+  //     await calculatePolizolSalaries({
+  //       producedCount: quantity,
+  //       loadedCount: 0,
+  //       session,
+  //     });
+
+  //     await session.commitTransaction();
+  //     return response.created(
+  //       res,
+  //       `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${isDefective ? " (Brak sifatida)" : ""}`,
+  //       {
+  //         totalCost: totalCostSum,
+  //         materialStatistics,
+  //         isDefective,
+  //         defectiveInfo: isDefective
+  //           ? {
+  //             defectiveReason,
+  //             defectiveDescription,
+  //             defectiveDate: new Date(),
+  //           }
+  //           : undefined,
+  //       }
+  //     );
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     return response.error(res, "❌ Ishlab chiqarish xatolikka uchradi", error.message);
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
+
+
+
+
   async productionProcess(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -25,21 +212,23 @@ class ProductionSystem {
         quantityToProduce,
         consumedMaterials,
         materialStatistics,
+        electricityConsumption,
+        gasConsumption,
         marketType = "tashqi",
-        isDefective = false, // Brak holati, agar kiritilmasa false
-        defectiveReason = "", // Brak sababi
-        defectiveDescription = "", // Brak tavsifi
+        isDefective = false,
+        defectiveReason = "",
+        defectiveDescription = "",
       } = req.body;
 
-      // 1. Kiruvchi ma'lumotlarni tekshirish
-      if (!productNormaId || !quantityToProduce || quantityToProduce <= 0) {
+      const quantity = Number(quantityToProduce);
+      if (!productNormaId || !quantity || quantity <= 0) {
         throw new Error("Mahsulot normasi yoki miqdori noto‘g‘ri");
       }
 
-      if (
-        !Array.isArray(consumedMaterials) ||
-        !Array.isArray(materialStatistics)
-      ) {
+      const factoryData = await Factory.find();
+      const factoryId = factoryData[0];
+
+      if (!Array.isArray(consumedMaterials) || !Array.isArray(materialStatistics)) {
         throw new Error("Material ma'lumotlari noto‘g‘ri");
       }
 
@@ -48,164 +237,165 @@ class ProductionSystem {
       }
 
       const productNorma = await ProductNorma.findById(productNormaId).lean();
-      if (!productNorma) {
-        throw new Error("Mahsulot normasi topilmadi");
+      if (!productNorma || !productNorma.cost) {
+        throw new Error("Mahsulot normasi topilmadi yoki ishlab chiqarish xarajatlari aniqlanmagan");
       }
 
-      if (!productNorma.cost) {
-        throw new Error(
-          "Mahsulot normasida ishlab chiqarish xarajatlari aniqlanmagan"
-        );
-      }
+      // Use factory prices for electricity and gas
+      const electricityCostPerKWH = Number(factoryId.electricityPrice);
+      const gasCostPerKWH = Number(factoryId.methaneGasPrice);
 
-      const {
-        productionCost = 0,
-        gasPerUnit = 0,
-        electricityPerUnit = 0,
-      } = productNorma.cost;
+      // Use electricityConsumption and gasConsumption from req.body if provided, else fall back to productNorma.cost
+      const totalElectricityUsed = Number(electricityConsumption || productNorma.cost?.electricity || 0);
+      const totalGasUsed = Number(gasConsumption || productNorma.cost?.gas || 0);
 
-      // 2. Materiallarni tekshirish va kamaytirish
+      const workerPayPerUnit = Number(200);
+      const loadingPayPerUnit = Number(150);
+
       const materialsUsed = [];
+      let totalMaterialCost = 0;
 
       for (const consumed of consumedMaterials) {
-        const material = await Material.findById(consumed.materialId).session(
-          session
-        );
+        const material = await Material.findById(consumed.materialId).session(session);
         if (!material) {
           throw new Error(`Material topilmadi: ID ${consumed.materialId}`);
         }
+        const consumedQuantity = Number(consumed.quantity || 0);
+        const unitPrice = Number(material.price);
+        const cost = consumedQuantity * unitPrice;
+        totalMaterialCost += cost;
 
-        const consumedQuantity = consumed.quantity || 0;
-
-        if (material.quantity < consumedQuantity) {
-          throw new Error(
-            `Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`
-          );
+        if (Number(material.quantity) < consumedQuantity) {
+          throw new Error(`Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`);
         }
 
-        material.quantity -= consumedQuantity;
+        material.quantity = Number(material.quantity) - consumedQuantity;
         await material.save({ session });
 
         materialsUsed.push({
           materialId: material._id,
           materialName: material.name,
           quantityUsed: consumedQuantity,
-          unitPrice: material.price,
+          unitPrice,
         });
       }
 
-      // 3. Statistika tekshiruvi
       if (materialStatistics.length !== consumedMaterials.length) {
-        throw new Error(
-          "Material statistikasi va ishlatilgan materiallar mos emas"
-        );
+        throw new Error("Material statistikasi va ishlatilgan materiallar mos emas");
       }
 
       for (const stat of materialStatistics) {
         if (!["exceed", "insufficient", "equal"].includes(stat.status)) {
-          throw new Error(
-            `Noto‘g‘ri status: ${stat.status} uchun ${stat.materialName}`
-          );
+          throw new Error(`Noto‘g‘ri status: ${stat.status} uchun ${stat.materialName}`);
         }
       }
 
-      // 4. Tayyor mahsulotni yangilash yoki yaratish
-      let finishedProduct;
+      // Calculate total costs for gas and electricity
+      const totalGasCost = totalGasUsed * gasCostPerKWH;
+      const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
 
-      // Always create a new document for defective products
+      const totalWorkerCost = workerPayPerUnit * quantity;
+      const totalLoadingCost = loadingPayPerUnit * quantity;
+
+      const extraCosts = Number(productNorma.cost?.extraCosts || 0);
+      const totalCostSum = totalMaterialCost + totalGasCost + totalElectricityCost + totalWorkerCost + totalLoadingCost + extraCosts;
+      const productionCost = totalCostSum / quantity;
+
       const created = await FinishedProduct.create(
         [
           {
             productName: productNorma.productName,
             category: productNorma.category,
             marketType,
-            quantity: quantityToProduce,
+            quantity,
             productionCost,
-            sellingPrice: productNorma?.salePrice || 0,
+            sellingPrice: Number(productNorma?.salePrice || 0),
             isDefective,
             defectiveInfo: isDefective
               ? {
-                  defectiveReason,
-                  defectiveDescription,
-                  defectiveDate: new Date(),
-                }
+                defectiveReason,
+                defectiveDescription,
+                defectiveDate: new Date(),
+              }
               : {
-                  defectiveReason: "",
-                  defectiveDescription: "",
-                  defectiveDate: null,
-                },
+                defectiveReason: "",
+                defectiveDescription: "",
+                defectiveDate: null,
+              },
           },
         ],
         { session }
       );
-      finishedProduct = created[0];
 
-      // 5. Ishlab chiqarish tarixini saqlash
+      const finishedProduct = created[0];
+
       await ProductionHistory.create(
         [
           {
             productNormaId: productNorma._id,
             productName: productNorma.productName,
-            quantityProduced: quantityToProduce,
+            quantityProduced: quantity,
             materialsUsed,
             materialStatistics,
-            totalCost: productionCost * quantityToProduce,
+            totalCost: totalCostSum,
             marketType,
-            gasAmount: gasPerUnit * quantityToProduce,
-            electricity: electricityPerUnit * quantityToProduce,
+            gasAmount: gasConsumption,
+            electricity: electricityConsumption,
             isDefective,
+            salePrice: Number(productNorma.salePrice),
             defectiveInfo: isDefective
               ? {
-                  defectiveReason,
-                  defectiveDescription,
-                  defectiveDate: new Date(),
-                }
+                defectiveReason,
+                defectiveDescription,
+                defectiveDate: new Date(),
+              }
               : undefined,
           },
         ],
         { session }
       );
 
-      // 6. Polizol ish haqini hisoblash
       await calculatePolizolSalaries({
-        producedCount: quantityToProduce,
+        producedCount: quantity,
         loadedCount: 0,
         session,
       });
 
-      // 7. Success
       await session.commitTransaction();
       return response.created(
         res,
-        `✅ ${
-          productNorma.productName
-        } dan ${quantityToProduce} dona ishlab chiqarildi${
-          isDefective ? " (Brak sifatida)" : ""
-        }`,
+        `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${isDefective ? " (Brak sifatida)" : ""}`,
         {
-          totalCost: productionCost * quantityToProduce,
+          totalCost: totalCostSum,
           materialStatistics,
           isDefective,
           defectiveInfo: isDefective
             ? {
-                defectiveReason,
-                defectiveDescription,
-                defectiveDate: new Date(),
-              }
+              defectiveReason,
+              defectiveDescription,
+              defectiveDate: new Date(),
+            }
             : undefined,
+          totalElectricityUsed,
+          totalGasUsed,
+          totalElectricityCost,
+          totalGasCost,
         }
       );
     } catch (error) {
       await session.abortTransaction();
-      return response.error(
-        res,
-        "❌ Ishlab chiqarish xatolikka uchradi",
-        error.message
-      );
+      return response.error(res, "❌ Ishlab chiqarish xatolikka uchradi", error.message);
     } finally {
       session.endSession();
     }
   }
+
+
+
+
+
+
+
 
   async finishedProducts(req, res) {
     try {
@@ -301,8 +491,7 @@ class ProductionSystem {
         session.endSession();
         return response.error(
           res,
-          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${
-            bn3Material?.quantity || 0
+          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${bn3Material?.quantity || 0
           }`
         );
       }
