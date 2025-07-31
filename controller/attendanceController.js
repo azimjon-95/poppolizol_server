@@ -85,7 +85,9 @@ class AttendanceController {
           ],
           { session }
         );
-        await recalculatePolizolSalaries(date, session);
+        if (!cleaning) {
+          await recalculatePolizolSalaries(date, session);
+        }
       } else {
         attendanceRecord = await Attendance.findOneAndUpdate(
           { employee: employeeId, date: new Date(date) },
@@ -97,17 +99,24 @@ class AttendanceController {
           },
           { upsert: true, new: true, session }
         );
-        await recalculatePolizolSalaries(date, session);
+        if (!cleaning) {
+          await recalculatePolizolSalaries(date, session);
+        }
       }
 
       if (cleaning) {
+        let today = new Date(date);
+        today.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(today.getTime() + 86399999);
+
         let salaryRecord = await SalaryRecord.findOne({
-          date: { $gte: new Date(date), $lte: new Date(date) },
+          date: { $gte: today, $lte: endOfDay },
           type: "cleaning",
         });
 
         if (!salaryRecord) {
-          salaryRecord = await SalaryRecord.create(
+          console.log("if");
+          let result = await SalaryRecord.create(
             [
               {
                 date: new Date(date),
@@ -127,7 +136,9 @@ class AttendanceController {
             ],
             { session }
           );
+          console.log(result);
         } else {
+          console.log("else");
           const todayAttendances = await Attendance.find({
             date: { $gte: today, $lte: endOfDay },
             unit: unit,
@@ -153,6 +164,7 @@ class AttendanceController {
 
           salaryRecord.totalSum = totalSum;
           salaryRecord.salaryPerPercent = salaryPerPercent;
+          console.log(">>", salaryRecord);
 
           await salaryRecord.save({ session });
         }
