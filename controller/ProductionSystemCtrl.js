@@ -7,11 +7,16 @@ const response = require("../utils/response");
 const mongoose = require("mongoose");
 const {
   calculateOchisleniya,
+  reCalculateBtm5Sale,
 } = require("./calculateSalary/calculateOchisleniya");
 
 const {
   calculatePolizolSalaries,
 } = require("./calculateSalary/calculatePolizol");
+
+const {
+  calculateRuberoidSalaries,
+} = require("./calculateSalary/calculateRubiroid");
 
 class ProductionSystem {
   async productionProcess(req, res) {
@@ -29,6 +34,7 @@ class ProductionSystem {
         isDefective = false, // Brak holati, agar kiritilmasa false
         defectiveReason = "", // Brak sababi
         defectiveDescription = "", // Brak tavsifi
+        date = new Date(),
       } = req.body;
 
       // 1. Kiruvchi ma'lumotlarni tekshirish
@@ -165,13 +171,27 @@ class ProductionSystem {
         ],
         { session }
       );
+      console.log(productName);
+
+      if (productName.toLowerCase().includes("ruberoid")) {
+        console.log("start");
+        await calculateRuberoidSalaries({
+          producedCount: quantityToProduce,
+          product_id: productNorma._id,
+          date,
+          session,
+        });
+      }
 
       // 6. Polizol ish haqini hisoblash
-      await calculatePolizolSalaries({
-        producedCount: quantityToProduce,
-        loadedCount: 0,
-        session,
-      });
+      if (productName.toLowerCase().includes("polizol")) {
+        await calculatePolizolSalaries({
+          producedCount: quantityToProduce,
+          loadedCount: 0,
+          session,
+          date,
+        });
+      }
 
       // 7. Success
       await session.commitTransaction();
@@ -558,6 +578,9 @@ class ProductionSystem {
 
       // Inventory'ga saqlash
       const [inventory] = await Inventory.create([inventoryData], { session });
+
+      let btm5Sale = bn5Amount + melAmount;
+      await reCalculateBtm5Sale(btm5Sale, date, session);
 
       // Yakunlash
       await session.commitTransaction();

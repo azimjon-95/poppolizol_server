@@ -17,10 +17,11 @@ const salaryController = require("../controller/calculateSalary/salaryController
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
 const normaValidation = require("../validation/normaValidation");
-const DebtController = require('../controller/debtController');
-const DashboardController = require('../controller/dashboardController');
+const DebtController = require("../controller/debtController");
+const DashboardController = require("../controller/dashboardController");
 
 router.get("/salary/getAll", salaryController.getAll);
+router.get("/salary/getBTM3", salaryController.getSalariesBTM3);
 
 // attendance routes
 router.post("/attendance", attendanceController.markAttendance);
@@ -161,8 +162,8 @@ router.get(
   "/sales/customer/:customerId/active",
   SaleController.getCustomerActiveSales
 );
-router.get('/transports', SaleController.getTransport);
-router.post('/deliver', SaleController.deliverProduct);
+router.get("/transports", SaleController.getTransport);
+router.post("/deliver", SaleController.deliverProduct);
 
 /**
  * ============================
@@ -176,26 +177,21 @@ router.get("/plans/:id", SalesController.getPlanById);
 router.put("/plans/:id", SalesController.updatePlan);
 router.delete("/plans/:id", SalesController.deletePlan);
 
-
 /**
  * ============================
  * Debt Routes
  * ============================
  */
-router.post('/debts', DebtController.createDebt);
-router.post('/debts/repay', DebtController.repayDebt);
-router.get('/debts/active', DebtController.getActiveDebts);
-router.get('/debts/history', DebtController.getDebtHistory);
+router.post("/debts", DebtController.createDebt);
+router.post("/debts/repay", DebtController.repayDebt);
+router.get("/debts/active", DebtController.getActiveDebts);
+router.get("/debts/history", DebtController.getDebtHistory);
 
 /**
  * ============================
  *  Dashboard Routes
  * ============================
  */
-router.get('/dashboard', DashboardController.getMonthlyDashboard);
-
-
+router.get("/dashboard", DashboardController.getMonthlyDashboard);
 
 module.exports = router;
-
-

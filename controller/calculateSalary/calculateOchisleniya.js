@@ -44,8 +44,8 @@ const calculateOchisleniya = async (btm3, btm5, inputDate, session = null) => {
 
   if (salaryRecord) {
     // Update
-    salaryRecord.producedCount = btm3;
-    salaryRecord.loadedCount = btm5;
+    salaryRecord.btm_3 = btm3;
+    salaryRecord.btm_5 = btm5;
     salaryRecord.totalSum = totalSalary;
     salaryRecord.salaryPerPercent = salaryPerPercent;
     salaryRecord.workers = workers;
@@ -70,4 +70,72 @@ const calculateOchisleniya = async (btm3, btm5, inputDate, session = null) => {
   }
 };
 
-module.exports = { calculateOchisleniya };
+const reCalculateBtm5Sale = async (btm5_sale, inputDate, session = null) => {
+  try {
+    console.log("start");
+
+    const targetDate = new Date(inputDate);
+    targetDate.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate.getTime() + 86399999);
+
+    // 1. Davomat olish (faqat ochisleniya bo‘limi)
+    const attendances = await Attendance.find({
+      date: { $gte: targetDate, $lte: endOfDay },
+      unit: "ochisleniya",
+    })
+      .populate("employee")
+      .session(session);
+
+    if (attendances.length === 0) {
+      console.log("Davomat topilmadi: ochisleniya");
+      return null;
+    }
+
+    let salaryRecord = await SalaryRecord.findOne({
+      date: { $gte: targetDate, $lte: endOfDay },
+      department: "ochisleniya",
+    }).session(session);
+
+    // 3. Umumiy foiz
+    const totalPercentage = attendances.reduce(
+      (sum, a) => sum + a.percentage,
+      0
+    );
+
+    let btmtSalePrice = btm5_sale * 150;
+    let totalPrice = salaryRecord?.totalSum || 0 + btmtSalePrice;
+    const salaryPerPercent = totalPrice / totalPercentage;
+
+    const workers = attendances.map((a) => ({
+      employee: a.employee._id,
+      percentage: a.percentage,
+      amount: Math.round(salaryPerPercent * a.percentage),
+    }));
+
+    if (salaryRecord) {
+      salaryRecord.btm_5_sale = btm5_sale;
+      salaryRecord.totalSum = totalPrice;
+      salaryRecord.salaryPerPercent = salaryPerPercent;
+      salaryRecord.workers = workers;
+      await salaryRecord.save({ session });
+    } else {
+      await SalaryRecord.create(
+        [
+          {
+            date: targetDate,
+            department: "ochisleniya",
+            btm_5_sale: btm5_sale,
+            totalSum: totalPrice,
+            salaryPerPercent,
+            workers,
+          },
+        ],
+        { session }
+      );
+    }
+  } catch (e) {
+    console.log(e);
+  }
+};
+
+module.exports = { calculateOchisleniya, reCalculateBtm5Sale };

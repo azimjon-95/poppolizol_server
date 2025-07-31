@@ -25,14 +25,31 @@ const SalaryRecordSchema = new Schema(
     },
     department: {
       type: String,
-      enum: ["polizol", "ochisleniya", "bt_5"], // mumkin bo‘lsa boshqa bo‘limlar ham qo‘shiladi
+      enum: ["polizol", "ochisleniya", "ruberoid"], // mumkin bo‘lsa boshqa bo‘limlar ham qo‘shiladi
       required: true,
     },
     producedCount: {
+      // polizol
       type: Number,
-      required: true,
+      default: 0,
     },
     loadedCount: {
+      // yuklangan yuk soni
+      type: Number,
+      default: 0,
+    },
+    btm_3: {
+      // qozonga tashlangan bitum 3 marka
+      type: Number,
+      default: 0,
+    },
+    btm_5: {
+      // qozonga tashlangan bitum 3 markadan ajrab chiqqan bitum 5 marka
+      type: Number,
+      default: 0,
+    },
+    btm_5_sale: {
+      // bitum 5 marka sotuv uchun ishlab chiqarilgan miqdor
       type: Number,
       default: 0,
     },

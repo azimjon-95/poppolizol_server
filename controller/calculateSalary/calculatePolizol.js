@@ -1,16 +1,25 @@
+const moment = require("moment-timezone");
 const Attendance = require("../../model/attendanceModal");
 const SalaryRecord = require("../../model/salaryRecord");
+
+const TIMEZONE = "Asia/Tashkent";
+
+function getDayRange(dateInput) {
+  const date = moment.tz(dateInput, TIMEZONE);
+  const start = date.clone().startOf("day").toDate();
+  const end = date.clone().endOf("day").toDate();
+  return { start, end };
+}
 
 async function calculatePolizolSalaries({
   producedCount,
   loadedCount = 0,
   session,
+  date = new Date(),
 }) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(today.getTime() + 86399999); // 23:59:59
+  const { start: today, end: endOfDay } = getDayRange(date);
+  console.log(">>> [calculate]", today, endOfDay);
 
-  // 1. Bugungi davomatlar
   const todayAttendances = await Attendance.find({
     date: { $gte: today, $lte: endOfDay },
     unit: "polizol",
@@ -20,20 +29,17 @@ async function calculatePolizolSalaries({
 
   if (todayAttendances.length === 0) return null;
 
-  // 2. Ish haqi birlik narxlari
   const unitProductionPrice = 2800;
   const unitLoadPrice = 400;
 
-  // 3. Mavjud SalaryRecord ni qidirish
   let salaryRecord = await SalaryRecord.findOne({
     date: { $gte: today, $lte: endOfDay },
     department: "polizol",
   }).session(session);
 
-  let currentProducedCount = salaryRecord?.producedCount || 0;
-  let currentLoadedCount = salaryRecord?.loadedCount || 0;
+  const currentProducedCount = salaryRecord?.producedCount || 0;
+  const currentLoadedCount = salaryRecord?.loadedCount || 0;
 
-  // 4. Yangi jami qiymatlar
   const newProducedCount = currentProducedCount + producedCount;
   const newLoadedCount = currentLoadedCount + loadedCount;
 
@@ -53,7 +59,6 @@ async function calculatePolizolSalaries({
     amount: Math.round(salaryPerPercent * a.percentage),
   }));
 
-  // 5. Yangilash yoki yaratish
   if (salaryRecord) {
     salaryRecord.producedCount = newProducedCount;
     salaryRecord.loadedCount = newLoadedCount;
@@ -65,7 +70,7 @@ async function calculatePolizolSalaries({
     await SalaryRecord.create(
       [
         {
-          date: new Date(),
+          date: today, // bu yerda aniq Asia/Tashkent 00:00:00 bo‘yicha saqlanadi
           department: "polizol",
           producedCount,
           loadedCount,
@@ -80,11 +85,9 @@ async function calculatePolizolSalaries({
 }
 
 async function recalculatePolizolSalaries(inputDate, session = null) {
-  const targetDate = new Date(inputDate);
-  targetDate.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(targetDate.getTime() + 86399999);
+  const { start: targetDate, end: endOfDay } = getDayRange(inputDate);
+  console.log("<<< [recalculate]", targetDate, endOfDay);
 
-  // 1. Davomatlar
   const attendances = await Attendance.find({
     date: { $gte: targetDate, $lte: endOfDay },
     unit: "polizol",
@@ -93,11 +96,10 @@ async function recalculatePolizolSalaries(inputDate, session = null) {
     .session(session);
 
   if (attendances.length === 0) {
-    console.log("Davomat topilmadi, hisoblash bekor qilindi:", inputDate);
+    console.log("❌ Davomat topilmadi:", inputDate);
     return null;
   }
 
-  // 2. SalaryRecord bor-yo‘qligini aniqlash
   let salaryRecord = await SalaryRecord.findOne({
     date: { $gte: targetDate, $lte: endOfDay },
     department: "polizol",
@@ -123,14 +125,11 @@ async function recalculatePolizolSalaries(inputDate, session = null) {
   }));
 
   if (salaryRecord) {
-    // 3. Mavjud bo‘lsa yangilash
     salaryRecord.totalSum = totalSum;
     salaryRecord.salaryPerPercent = salaryPerPercent;
     salaryRecord.workers = workers;
-
     await salaryRecord.save({ session });
   } else {
-    // 4. Yangi SalaryRecord yaratish
     await SalaryRecord.create(
       [
         {
@@ -147,7 +146,7 @@ async function recalculatePolizolSalaries(inputDate, session = null) {
     );
   }
 
-  console.log("✅ SalaryRecord qayta hisoblandi:", inputDate);
+  console.log("✅ Qayta hisoblandi:", inputDate);
 }
 
 module.exports = {
