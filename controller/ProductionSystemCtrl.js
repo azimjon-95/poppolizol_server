@@ -37,6 +37,7 @@ class ProductionSystem {
         isDefective = false,
         defectiveReason = "",
         defectiveDescription = "",
+        date = new Date(),
       } = req.body;
 
       const quantity = Number(quantityToProduce);

@@ -18,7 +18,6 @@ async function calculatePolizolSalaries({
   date = new Date(),
 }) {
   const { start: today, end: endOfDay } = getDayRange(date);
-  console.log(">>> [calculate]", today, endOfDay);
 
   const todayAttendances = await Attendance.find({
     date: { $gte: today, $lte: endOfDay },
