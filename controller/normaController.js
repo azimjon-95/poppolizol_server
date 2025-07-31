@@ -1,5 +1,5 @@
 const Norma = require("../model/productNormaSchema");
-const Factory = require("../model/factoryModel");
+const { Factory } = require("../model/factoryModel");
 const Material = require("../model/wherehouseModel");
 const response = require("../utils/response");
 
@@ -20,10 +20,10 @@ class NormaController {
 
   async createNorma(req, res) {
     try {
-      const { productName, category, salePrice, materials, description, cost } = req.body;
+      const { productName, category, salePrice, materials, description } = req.body;
 
       // Validate required fields
-      if (!productName || !materials || !cost) {
+      if (!productName || !materials) {
         return response.error(res, "Mahsulot nomi, materiallar yoki xarajatlar kiritilmagan");
       }
 
@@ -49,15 +49,6 @@ class NormaController {
         materialCost += material.price * item.quantity;
       }
 
-      // Calculate utility costs
-      const gasCost = cost.gasPerUnit * factory.methaneGasPrice;
-      const electricityCost = cost.electricityPerUnit * factory.electricityPrice;
-
-      // Adjust otherExpenses to 1% of its original value
-      const adjustedOtherExpenses = cost.otherExpenses * 0.01;
-
-      // Calculate total cost
-      const totalCost = materialCost + gasCost + electricityCost + cost.laborCost + adjustedOtherExpenses;
 
       // Create and save Norma document
       const norma = await Norma.create({
@@ -67,13 +58,6 @@ class NormaController {
         materials,
         description: description || null,
         size: req.body.size || null,
-        cost: {
-          gasPerUnit: cost.gasPerUnit,
-          electricityPerUnit: cost.electricityPerUnit,
-          laborCost: cost.laborCost,
-          otherExpenses: adjustedOtherExpenses, // Save adjusted otherExpenses
-          totalCost, // Save calculated totalCost
-        },
       });
 
       return response.success(res, "Norma muvaffaqiyatli yaratildi", norma);
@@ -156,7 +140,8 @@ class NormaController {
   async deleteNorma(req, res) {
     try {
       const { id } = req.params;
-      if (!id || !mongoose.isValidObjectId(id)) {
+
+      if (!id) {
         return response.error(res, "Noto'g'ri ID formati");
       }
       const norma = await Norma.findByIdAndDelete(id);

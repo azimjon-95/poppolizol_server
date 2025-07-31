@@ -20,7 +20,7 @@ const normaValidation = (req, res, next) => {
       },
       salePrice: {
         type: "number",
-        minimum: 0
+        minimum: 0,
       },
       materials: {
         type: "array",
@@ -55,71 +55,20 @@ const normaValidation = (req, res, next) => {
       description: {
         type: "string",
       },
-      cost: {
-        type: "object",
-        properties: {
-
-          gasPerUnit: {
-            type: "number",
-            minimum: 0,
-          },
-          electricityPerUnit: {
-            type: "number",
-            minimum: 0,
-          },
-          laborCost: {
-            type: "number",
-            minimum: 0,
-          },
-          otherExpenses: {
-            type: "number",
-            minimum: 0,
-          },
-          totalCost: {
-            type: "number",
-            minimum: 0,
-          },
-        },
-        required: [
-          "gasPerUnit",
-          "electricityPerUnit",
-          "laborCost",
-          "otherExpenses",
-
-        ],
-        additionalProperties: false,
-        errorMessage: {
-          type: "Xarajat ob'ekti noto'g'ri formatda",
-          required: {
-            gasPerUnit: "Birlik uchun gaz xarajati kiritilishi shart",
-            electricityPerUnit: "Birlik uchun elektr xarajati kiritilishi shart",
-            laborCost: "Mehnat xarajati kiritilishi shart",
-            otherExpenses: "Qo'shimcha xarajatlar kiritilishi shart",
-          },
-          properties: {
-            gasPerUnit: "Gaz xarajati 0 dan kichik bo'lmasligi kerak",
-            electricityPerUnit: "Elektr xarajati 0 dan kichik bo'lmasligi kerak",
-            laborCost: "Mehnat xarajati 0 dan kichik bo'lmasligi kerak",
-            otherExpenses: "Qo'shimcha xarajatlar 0 dan kichik bo'lmasligi kerak",
-            totalCost: "Jami xarajat 0 dan kichik bo'lmasligi kerak",
-            salePrice: "Sotuv narxi 0 dan kichik bo'lmasligi kerak",
-          },
-          additionalProperties: "Xarajat uchun ruxsat etilmagan maydon kiritildi",
-        },
-      },
     },
-    required: ["productName", "category", "materials", "cost"],
+    required: ["productName", "category", "materials", "salePrice"],
     additionalProperties: false,
     errorMessage: {
       required: {
         productName: "Mahsulot nomi kiritilishi shart",
         category: "Mahsulot turi kiritilishi shart",
         materials: "Mahsulot uchun material kiritilishi shart",
-        cost: "Mahsulot xarajatlari kiritilishi shart",
+        salePrice: "Sotuv narxi kiritilishi shart",
       },
       properties: {
         productName: "Mahsulot nomi 100 ta belgidan oshmasligi kerak",
         category: "Mahsulot turi 255 ta belgidan oshmasligi kerak",
+        salePrice: "Sotuv narxi 0 dan kichik bo'lmasligi kerak",
       },
       additionalProperties: "Ruxsat etilmagan maydon kiritildi",
     },

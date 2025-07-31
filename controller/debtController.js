@@ -49,6 +49,17 @@ class DebtController {
             let debt = await Debt.findById(debtId).session(session);
             if (debt) {
                 const updatedDebt = await Debt.repayDebt(debtId, amount, paymentMethod, session);
+                // Chiqim yozuvini saqlash (Debt uchun)
+                await new Expense({
+                    relatedId: debt._id,
+                    type: "chiqim",
+                    paymentMethod,
+                    category: "Qarz to'lovi", // Debt uchun category
+                    amount: amount,
+                    description: note || `Qarz to‘lovi: ${debtId}`,
+                    date: new Date(),
+                }).save({ session });
+
                 await session.commitTransaction();
                 return response.success(res, "Qarz to‘lovi muvaffaqiyatli amalga oshirildi", updatedDebt);
             }
@@ -81,17 +92,17 @@ class DebtController {
                 // To‘lov yozuvini qo‘shish
                 income.debt.debtPayments.push({
                     amount: debtToPay,
-                    paymentDate: new Date(),
                     paymentMethod,
+                    paymentDate: new Date(),
                     note,
                 });
 
-                // Chiqim yozuvini saqlash
+                // Chiqim yozuvini saqlash (Income uchun)
                 await new Expense({
                     relatedId: income._id,
                     type: "chiqim",
                     paymentMethod,
-                    category: "Qarz to'lovi",
+                    category: "Xomashyo: Ish/chiq. xarajatlari", // Income uchun category
                     amount: debtToPay,
                     description: note || `Firma uchun qarz to‘lovi: ${income.firm.name}`,
                     date: new Date(),

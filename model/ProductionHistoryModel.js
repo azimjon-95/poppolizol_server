@@ -4,6 +4,7 @@ const ProductionHistorySchema = new mongoose.Schema({
     productNormaId: { type: mongoose.Schema.Types.ObjectId, ref: "productNorma", required: true },
     productName: { type: String, required: true },
     quantityProduced: { type: Number, required: true },
+    salePrice: { type: Number, default: 0 },
     materialsUsed: [{
         materialId: { type: mongoose.Schema.Types.ObjectId, ref: "materials" },
         materialName: String,

@@ -1,4 +1,5 @@
 const Material = require("../model/wherehouseModel");
+const { Product, Factory } = require("../model/factoryModel");
 const ProductNorma = require("../model/productNormaSchema");
 const FinishedProduct = require("../model/finishedProductModel");
 const ProductionHistory = require("../model/ProductionHistoryModel");
@@ -30,16 +31,28 @@ class ProductionSystem {
         quantityToProduce,
         consumedMaterials,
         materialStatistics,
+        electricityConsumption,
+        gasConsumption,
         marketType = "tashqi",
-        isDefective = false, // Brak holati, agar kiritilmasa false
-        defectiveReason = "", // Brak sababi
-        defectiveDescription = "", // Brak tavsifi
-        date = new Date(),
+        isDefective = false,
+        defectiveReason = "",
+        defectiveDescription = "",
       } = req.body;
 
-      // 1. Kiruvchi ma'lumotlarni tekshirish
-      if (!productNormaId || !quantityToProduce || quantityToProduce <= 0) {
+      const quantity = Number(quantityToProduce);
+      if (!productNormaId || !quantity || quantity <= 0) {
         throw new Error("Mahsulot normasi yoki miqdori noto‘g‘ri");
+      }
+
+      const factoryData = await Factory.find();
+      const factoryId = factoryData[0];
+
+      const productionPrice = await Product.findOne({
+        name: productName,
+      });
+
+      if (!productionPrice) {
+        throw new Error("Ishlab chiqarish va Yuklash narxlari topilmadi!");
       }
 
       if (
@@ -54,24 +67,36 @@ class ProductionSystem {
       }
 
       const productNorma = await ProductNorma.findById(productNormaId).lean();
-      if (!productNorma) {
-        throw new Error("Mahsulot normasi topilmadi");
-      }
-
-      if (!productNorma.cost) {
+      if (!productNorma || !productNorma.cost) {
         throw new Error(
-          "Mahsulot normasida ishlab chiqarish xarajatlari aniqlanmagan"
+          "Mahsulot normasi topilmadi yoki ishlab chiqarish xarajatlari aniqlanmagan"
         );
       }
 
-      const {
-        productionCost = 0,
-        gasPerUnit = 0,
-        electricityPerUnit = 0,
-      } = productNorma.cost;
+      // Use factory prices for electricity and gas
+      const electricityCostPerKWH = Number(factoryId.electricityPrice);
+      const gasCostPerKWH = Number(factoryId.methaneGasPrice);
 
-      // 2. Materiallarni tekshirish va kamaytirish
+      // Sarflangan elektr va gaz miqdorini yaxlitlab olamiz
+      const totalElectricityUsed = parseFloat(
+        (electricityConsumption || productNorma.cost?.electricity || 0).toFixed(
+          2
+        )
+      );
+      const totalGasUsed = parseFloat(
+        (gasConsumption || productNorma.cost?.gas || 0).toFixed(2)
+      );
+
+      // Ish haqi va yuklash narxlarini yaxlitlab olamiz
+      const workerPayPerUnit = parseFloat(
+        Number(productionPrice.productionCost).toFixed(2)
+      );
+      const loadingPayPerUnit = parseFloat(
+        Number(productionPrice.loadingCost).toFixed(2)
+      );
+
       const materialsUsed = [];
+      let totalMaterialCost = 0;
 
       for (const consumed of consumedMaterials) {
         const material = await Material.findById(consumed.materialId).session(
@@ -81,26 +106,33 @@ class ProductionSystem {
           throw new Error(`Material topilmadi: ID ${consumed.materialId}`);
         }
 
-        const consumedQuantity = consumed.quantity || 0;
+        const consumedQuantity = parseFloat(
+          Number(consumed.quantity || 0).toFixed(2)
+        );
+        const unitPrice = parseFloat(Number(material.price).toFixed(2));
+        const cost = parseFloat((consumedQuantity * unitPrice).toFixed(2));
 
-        if (material.quantity < consumedQuantity) {
+        totalMaterialCost = parseFloat((totalMaterialCost + cost).toFixed(2));
+
+        if (Number(material.quantity) < consumedQuantity) {
           throw new Error(
             `Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`
           );
         }
 
-        material.quantity -= consumedQuantity;
+        material.quantity = parseFloat(
+          (Number(material.quantity) - consumedQuantity).toFixed(2)
+        );
         await material.save({ session });
 
         materialsUsed.push({
           materialId: material._id,
           materialName: material.name,
           quantityUsed: consumedQuantity,
-          unitPrice: material.price,
+          unitPrice,
         });
       }
 
-      // 3. Statistika tekshiruvi
       if (materialStatistics.length !== consumedMaterials.length) {
         throw new Error(
           "Material statistikasi va ishlatilgan materiallar mos emas"
@@ -115,19 +147,33 @@ class ProductionSystem {
         }
       }
 
-      // 4. Tayyor mahsulotni yangilash yoki yaratish
-      let finishedProduct;
+      // Calculate total costs for gas and electricity
+      const totalGasCost = totalGasUsed * gasCostPerKWH;
+      const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
 
-      // Always create a new document for defective products
+      const totalWorkerCost = workerPayPerUnit * quantity;
+      const totalLoadingCost = loadingPayPerUnit * quantity;
+
+      const extraCosts = Number(productNorma.cost?.extraCosts || 0);
+      const totalCostSum =
+        totalMaterialCost +
+        totalGasCost +
+        totalElectricityCost +
+        totalWorkerCost +
+        totalLoadingCost +
+        extraCosts;
+      const productionCost = totalCostSum / quantity;
+
+      const cost = Math.floor(productionCost) / Math.floor(quantity);
       const created = await FinishedProduct.create(
         [
           {
             productName: productNorma.productName,
             category: productNorma.category,
             marketType,
-            quantity: quantityToProduce,
-            productionCost,
-            sellingPrice: productNorma?.salePrice || 0,
+            quantity,
+            productionCost: cost,
+            sellingPrice: Number(Math.floor(productNorma?.salePrice) || 0),
             isDefective,
             defectiveInfo: isDefective
               ? {
@@ -144,22 +190,23 @@ class ProductionSystem {
         ],
         { session }
       );
-      finishedProduct = created[0];
 
-      // 5. Ishlab chiqarish tarixini saqlash
+      const finishedProduct = created[0];
+
       await ProductionHistory.create(
         [
           {
             productNormaId: productNorma._id,
             productName: productNorma.productName,
-            quantityProduced: quantityToProduce,
+            quantityProduced: quantity,
             materialsUsed,
             materialStatistics,
-            totalCost: productionCost * quantityToProduce,
+            totalCost: totalCostSum,
             marketType,
-            gasAmount: gasPerUnit * quantityToProduce,
-            electricity: electricityPerUnit * quantityToProduce,
+            gasAmount: gasConsumption,
+            electricity: electricityConsumption,
             isDefective,
+            salePrice: Number(productNorma.salePrice),
             defectiveInfo: isDefective
               ? {
                   defectiveReason,
@@ -184,7 +231,10 @@ class ProductionSystem {
       }
 
       // 6. Polizol ish haqini hisoblash
-      if (productName.toLowerCase().includes("polizol")) {
+      if (
+        productName.toLowerCase().includes("polizol") ||
+        productName.toLowerCase().includes("folygoizol")
+      ) {
         await calculatePolizolSalaries({
           producedCount: quantityToProduce,
           loadedCount: 0,
@@ -193,17 +243,14 @@ class ProductionSystem {
         });
       }
 
-      // 7. Success
       await session.commitTransaction();
       return response.created(
         res,
-        `✅ ${
-          productNorma.productName
-        } dan ${quantityToProduce} dona ishlab chiqarildi${
+        `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${
           isDefective ? " (Brak sifatida)" : ""
         }`,
         {
-          totalCost: productionCost * quantityToProduce,
+          totalCost: totalCostSum,
           materialStatistics,
           isDefective,
           defectiveInfo: isDefective
@@ -213,6 +260,10 @@ class ProductionSystem {
                 defectiveDate: new Date(),
               }
             : undefined,
+          totalElectricityUsed,
+          totalGasUsed,
+          totalElectricityCost,
+          totalGasCost,
         }
       );
     } catch (error) {

@@ -35,34 +35,6 @@ const ProductNormaSchema = new mongoose.Schema(
     description: {
       type: String,
     },
-    cost: {
-      gasPerUnit: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-      electricityPerUnit: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-      laborCost: {
-        type: Number,
-        required: true,
-        min: 0,
-        default: 0,
-      },
-      otherExpenses: {
-        type: Number,
-        required: true,
-        min: 0,
-        default: 0,
-      },
-      totalCost: {
-        type: Number,
-        default: 0,
-      },
-    },
   },
   { timestamps: true }
 );
