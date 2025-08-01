@@ -18,6 +18,8 @@ class SalaryRecordController {
         const now = new Date();
         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        lastDay.setHours(23, 59, 59, 999); // oyning oxirgi kuni, soat 23:59:59.999
+
         filter.date = {
           $gte: firstDay,
           $lte: lastDay,
@@ -79,7 +81,6 @@ class SalaryRecordController {
           : wp.workerId?.toString();
         if (!summary[id]) {
           summary[id] = {
-            
             workerId: id,
             totalPayment: 0,
             worker: wp.workerId, // populated object

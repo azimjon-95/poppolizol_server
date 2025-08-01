@@ -6,12 +6,20 @@ const {
   recalculatePolizolSalaries,
 } = require("../controller/calculateSalary/calculatePolizol");
 
+const SalaryRecord = require("../model/salaryRecord");
+
 class AttendanceController {
   async markAttendance(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
     try {
-      const { employeeId, date, percentage, department: unit } = req.body;
+      const {
+        employeeId,
+        date,
+        percentage,
+        department: unit,
+        cleaning,
+      } = req.body;
 
       if (!unit) {
         await session.abortTransaction();
@@ -77,7 +85,9 @@ class AttendanceController {
           ],
           { session }
         );
-        await recalculatePolizolSalaries(date, session);
+        if (!cleaning) {
+          await recalculatePolizolSalaries(date, session);
+        }
       } else {
         attendanceRecord = await Attendance.findOneAndUpdate(
           { employee: employeeId, date: new Date(date) },
@@ -89,7 +99,75 @@ class AttendanceController {
           },
           { upsert: true, new: true, session }
         );
-        await recalculatePolizolSalaries(date, session);
+        if (!cleaning) {
+          await recalculatePolizolSalaries(date, session);
+        }
+      }
+
+      if (cleaning) {
+        let today = new Date(date);
+        today.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(today.getTime() + 86399999);
+
+        let salaryRecord = await SalaryRecord.findOne({
+          date: { $gte: today, $lte: endOfDay },
+          type: "cleaning",
+        });
+
+        if (!salaryRecord) {
+          console.log("if");
+          let result = await SalaryRecord.create(
+            [
+              {
+                date: new Date(date),
+                type: "cleaning",
+                amount: cleaning,
+                department: unit,
+                totalSum: 120000 * percentage,
+                salaryPerPercent: 120000 * percentage,
+                workers: [
+                  {
+                    employee: employeeId,
+                    percentage: percentage,
+                    amount: 120000 * percentage,
+                  },
+                ],
+              },
+            ],
+            { session }
+          );
+          console.log(result);
+        } else {
+          console.log("else");
+          const todayAttendances = await Attendance.find({
+            date: { $gte: today, $lte: endOfDay },
+            unit: unit,
+          })
+            .populate("employee")
+            .session(session);
+
+          if (todayAttendances.length === 0) return null;
+
+          const totalPercentage = todayAttendances.reduce(
+            (sum, a) => sum + a.percentage,
+            0
+          );
+
+          let totalSum = totalPercentage * 120000;
+          let salaryPerPercent = totalSum / totalPercentage;
+
+          salaryRecord.workers.push({
+            employee: employeeId,
+            percentage: percentage,
+            amount: 120000 * percentage,
+          });
+
+          salaryRecord.totalSum = totalSum;
+          salaryRecord.salaryPerPercent = salaryPerPercent;
+          console.log(">>", salaryRecord);
+
+          await salaryRecord.save({ session });
+        }
       }
 
       await session.commitTransaction();

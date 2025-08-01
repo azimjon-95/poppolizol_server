@@ -62,6 +62,11 @@ const SalaryRecordSchema = new Schema(
       required: true,
     },
     workers: [WorkerShareSchema],
+    type: {
+      type: String,
+      enum: ["default", "cleaning"],
+      default: "default",
+    },
   },
   { timestamps: true }
 );

@@ -18,7 +18,6 @@ async function calculatePolizolSalaries({
   date = new Date(),
 }) {
   const { start: today, end: endOfDay } = getDayRange(date);
-  console.log(">>> [calculate]", today, endOfDay);
 
   const todayAttendances = await Attendance.find({
     date: { $gte: today, $lte: endOfDay },
@@ -86,7 +85,6 @@ async function calculatePolizolSalaries({
 
 async function recalculatePolizolSalaries(inputDate, session = null) {
   const { start: targetDate, end: endOfDay } = getDayRange(inputDate);
-  console.log("<<< [recalculate]", targetDate, endOfDay);
 
   const attendances = await Attendance.find({
     date: { $gte: targetDate, $lte: endOfDay },
@@ -145,8 +143,6 @@ async function recalculatePolizolSalaries(inputDate, session = null) {
       { session }
     );
   }
-
-  console.log("✅ Qayta hisoblandi:", inputDate);
 }
 
 module.exports = {

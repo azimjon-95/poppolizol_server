@@ -174,6 +174,78 @@ class SaleController {
         .populate("salerId", "firstName lastName")
         .lean();
 
+      return response.created(
+        res,
+        "Shartnoma muvaffaqiyatli tuzildi!",
+        populatedSale
+      );
+    } catch (error) {
+      await session.abortTransaction();
+      return response.serverError(
+        res,
+        "Sotuvni saqlashda xatolik!",
+        error.message
+      );
+    } finally {
+      session.endSession();
+    }
+  }
+
+  async deliverProduct(req, res) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const { saleId, items } = req.body;
+
+      // 1. Sotuvni topamiz
+      const sale = await Salecart.findById(saleId).session(session);
+      if (!sale) {
+        return response.notFound(res, "Sotuv topilmadi");
+      }
+
+      for (const item of items) {
+        const { productId, quantity } = item;
+
+        // 2. Tayyor mahsulotni topib, quantity ni kamaytiramiz
+        const product = await FinishedProduct.findById(productId).session(
+          session
+        );
+        if (!product) {
+          return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
+        }
+
+        if (product.quantity < quantity) {
+          return response.error(
+            res,
+            `Mahsulot yetarli emas: ${product.productName}`
+          );
+        }
+
+        product.quantity -= quantity;
+        // Validate only modified fields to avoid issues with required fields like returnInfo
+        await product.save({ session, validateModifiedOnly: true });
+
+        const saleItem = sale.items.find(
+          (i) =>
+            i.productId &&
+            productId &&
+            i.productId.toString() === productId.toString()
+        );
+
+        if (!saleItem) {
+          return response.error(
+            res,
+            `Sotuvda mahsulot topilmadi: ${productId}`
+          );
+        }
+
+        saleItem.deliveredQuantity += quantity;
+        saleItem.updatedAt = new Date();
+      }
+
+      await sale.save({ session });
+
       // -----------------------------------------------------------------
       let today = new Date();
       today.setHours(0, 0, 0, 0); // Faqat sana
@@ -264,70 +336,6 @@ class SaleController {
       }
 
       // -----------------------------------------------------------------
-
-      return response.created(
-        res,
-        "Shartnoma muvaffaqiyatli tuzildi!",
-        populatedSale
-      );
-    } catch (error) {
-      await session.abortTransaction();
-      return response.serverError(
-        res,
-        "Sotuvni saqlashda xatolik!",
-        error.message
-      );
-    } finally {
-      session.endSession();
-    }
-  }
-
-  async deliverProduct(req, res) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const { saleId, items } = req.body;
-
-      // 1. Sotuvni topamiz
-      const sale = await Salecart.findById(saleId).session(session);
-      if (!sale) {
-        return response.notFound(res, "Sotuv topilmadi");
-      }
-
-      for (const item of items) {
-        const { productId, quantity } = item;
-
-        // 2. Tayyor mahsulotni topib, quantity ni kamaytiramiz
-        const product = await FinishedProduct.findById(productId).session(session);
-        if (!product) {
-          return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
-        }
-
-        if (product.quantity < quantity) {
-          return response.error(res, `Mahsulot yetarli emas: ${product.productName}`);
-        }
-
-        product.quantity -= quantity;
-        // Validate only modified fields to avoid issues with required fields like returnInfo
-        await product.save({ session, validateModifiedOnly: true });
-
-        const saleItem = sale.items.find(
-          (i) =>
-            i.productId &&
-            productId &&
-            i.productId.toString() === productId.toString()
-        );
-
-        if (!saleItem) {
-          return response.error(res, `Sotuvda mahsulot topilmadi: ${productId}`);
-        }
-
-        saleItem.deliveredQuantity += quantity;
-        saleItem.updatedAt = new Date();
-      }
-
-      await sale.save({ session });
 
       await session.commitTransaction();
       return response.success(res, "Mahsulotlar yetkazib berildi!");
@@ -569,7 +577,6 @@ class SaleController {
         (item) => item.deliveredQuantity > 0
       );
       if (hasDeliveredItems) {
-
         await session.abortTransaction();
         return response.error(
           res,
@@ -936,7 +943,6 @@ class SaleController {
     }
   }
 
-
   // Process product returns
   async returnItems(req, res) {
     let session;
@@ -944,21 +950,22 @@ class SaleController {
       session = await mongoose.startSession();
       await session.startTransaction();
 
-      const { items, customerName, reason, paymentType, description } = req.body.body || req.body;
+      const { items, customerName, reason, paymentType, description } =
+        req.body.body || req.body;
       console.log(items, customerName, reason, paymentType, description);
       if (!items?.length) {
-        return response.error(res, 'Qaytarish uchun mahsulotlar kiritilmadi!');
+        return response.error(res, "Qaytarish uchun mahsulotlar kiritilmadi!");
       }
       if (!reason) {
-        return response.error(res, 'Qaytarish sababi kiritilmadi!');
+        return response.error(res, "Qaytarish sababi kiritilmadi!");
       }
-      if (!['naqt', 'bank'].includes(paymentType)) {
-        return response.error(res, 'To‘lov turi noto‘g‘ri kiritildi!');
+      if (!["naqt", "bank"].includes(paymentType)) {
+        return response.error(res, "To‘lov turi noto‘g‘ri kiritildi!");
       }
 
       const sale = await Salecart.findById(req.params.id).session(session);
       if (!sale) {
-        return response.notFound(res, 'Sotuv topilmadi!');
+        return response.notFound(res, "Sotuv topilmadi!");
       }
 
       // Calculate totalRefund dynamically
@@ -967,17 +974,24 @@ class SaleController {
       for (const returnItem of items) {
         const { productId, productName, category, quantity } = returnItem;
         if (!productId || !productName || !category || !quantity) {
-          return response.error(res, 'Mahsulot ma\'lumotlari to‘liq emas!');
+          return response.error(res, "Mahsulot ma'lumotlari to‘liq emas!");
         }
 
-        const originalProduct = await FinishedProduct.findById(productId).session(session);
+        const originalProduct = await FinishedProduct.findById(
+          productId
+        ).session(session);
         if (!originalProduct) {
           return response.notFound(res, `Mahsulot topilmadi: ${productName}`);
         }
 
-        const originalItem = sale.items.find(item => item.productId.toString() === productId);
+        const originalItem = sale.items.find(
+          (item) => item.productId.toString() === productId
+        );
         if (!originalItem || quantity > originalItem.quantity) {
-          return response.error(res, `Qaytarish miqdori ${productName} uchun sotuv miqdoridan oshib ketdi!`);
+          return response.error(
+            res,
+            `Qaytarish miqdori ${productName} uchun sotuv miqdoridan oshib ketdi!`
+          );
         }
 
         const refundForItem = quantity * originalProduct.sellingPrice;
@@ -985,7 +999,7 @@ class SaleController {
 
         const returnInfoEntry = {
           returnReason: reason,
-          returnDescription: description || '',
+          returnDescription: description || "",
           returnDate: new Date(),
           returnedQuantity: quantity,
           refundedAmount: refundForItem,
@@ -1021,15 +1035,13 @@ class SaleController {
         }
       }
 
-
-
-      await Balance.updateBalance(paymentType, 'chiqim', totalRefund, session);
+      await Balance.updateBalance(paymentType, "chiqim", totalRefund, session);
 
       const expense = new Expense({
         relatedId: sale._id.toString(),
-        type: 'chiqim',
+        type: "chiqim",
         paymentMethod: paymentType,
-        category: 'Qaytgan mahsulot!',
+        category: "Qaytgan mahsulot!",
         amount: totalRefund,
         description: `Sababi: ${reason}`,
         date: new Date(),
@@ -1047,7 +1059,7 @@ class SaleController {
           //   'payment.status': newPaidAmount >= sale.payment.totalAmount ? 'paid' : 'partial',
           // },
           $push: {
-            'payment.paymentHistory': {
+            "payment.paymentHistory": {
               amount: -totalRefund,
               date: new Date(),
               description: `Qaytarish: ${reason}`,
@@ -1062,19 +1074,26 @@ class SaleController {
       await session.commitTransaction();
 
       const populatedSale = await Salecart.findById(updatedSale._id)
-        .populate('customerId', 'name type phone companyAddress')
-        .populate('salerId', 'firstName lastName')
+        .populate("customerId", "name type phone companyAddress")
+        .populate("salerId", "firstName lastName")
         .lean();
 
-      return response.success(res, 'Mahsulot qaytarish muvaffaqiyatli!', populatedSale);
+      return response.success(
+        res,
+        "Mahsulot qaytarish muvaffaqiyatli!",
+        populatedSale
+      );
     } catch (error) {
       if (session?.inTransaction()) await session.abortTransaction();
-      return response.serverError(res, 'Mahsulot qaytarishda xatolik!', error.message);
+      return response.serverError(
+        res,
+        "Mahsulot qaytarishda xatolik!",
+        error.message
+      );
     } finally {
       if (session) await session.endSession();
     }
   }
-
 
   // Get transport records
   // Transport yozuvlarini olish
@@ -1174,6 +1193,3 @@ class SaleController {
 }
 
 module.exports = new SaleController();
-
-
-
