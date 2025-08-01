@@ -54,7 +54,27 @@ const productSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// ===================WorkerExpenses========================
+
+const workerExpensesSchema = new mongoose.Schema({
+  saturdayWage: {
+    type: Number,
+    required: true,
+  },
+  periodicExpenses: {
+    type: Number,
+    required: true,
+  },
+  additionalExpenses: {
+    type: Number,
+    required: true,
+  }
+}, {
+  timestamps: true,
+});
+
 const Product = mongoose.model('Product', productSchema);
 const Factory = mongoose.model('Factory', factorySchema);
+const AdditionExpen = mongoose.model('AdditionalExpenses', workerExpensesSchema);
 
-module.exports = { Product, Factory };
+module.exports = { Product, Factory, AdditionExpen };

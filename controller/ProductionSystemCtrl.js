@@ -1,5 +1,5 @@
 const Material = require("../model/wherehouseModel");
-const { Product, Factory } = require("../model/factoryModel");
+const { Product, Factory, AdditionExpen } = require("../model/factoryModel");
 const ProductNorma = require("../model/productNormaSchema");
 const FinishedProduct = require("../model/finishedProductModel");
 const ProductionHistory = require("../model/ProductionHistoryModel");
@@ -43,6 +43,21 @@ class ProductionSystem {
       if (!productNormaId || !quantity || quantity <= 0) {
         throw new Error("Mahsulot normasi yoki miqdori noto‘g‘ri");
       }
+      //AdditionExpen
+      const additionExpen = await AdditionExpen.find();
+      const additionExpenId = additionExpen[0];
+      if (!additionExpenId) {
+        throw new Error("Tannarx va boshqa xarajatlari topilmadi!");
+      }
+
+      const periodic = 1300000;  // 4% of 1,300,000
+      const additional = 1300000;  // 2% of 1,300,000
+
+      const periodicPercent = additionExpenId.periodicExpenses; // masalan 4
+      const additionalPercent = additionExpenId.additionalExpenses; // masalan 2
+      const periodicAmount = (periodic * periodicPercent) / 100;
+      const additionalAmount = (additional * additionalPercent) / 100;
+
 
       const factoryData = await Factory.find();
       const factoryId = factoryData[0];
@@ -154,15 +169,16 @@ class ProductionSystem {
       const totalWorkerCost = workerPayPerUnit * quantity;
       const totalLoadingCost = loadingPayPerUnit * quantity;
 
-      const extraCosts = Number(productNorma.cost?.extraCosts || 0);
       const totalCostSum =
         totalMaterialCost +
         totalGasCost +
         totalElectricityCost +
         totalWorkerCost +
         totalLoadingCost +
-        extraCosts;
+        periodicAmount +
+        additionalAmount;
       const productionCost = totalCostSum / quantity;
+
 
       const cost = Math.floor(productionCost) / Math.floor(quantity);
       const created = await FinishedProduct.create(
@@ -177,21 +193,21 @@ class ProductionSystem {
             isDefective,
             defectiveInfo: isDefective
               ? {
-                  defectiveReason,
-                  defectiveDescription,
-                  defectiveDate: new Date(),
-                }
+                defectiveReason,
+                defectiveDescription,
+                defectiveDate: new Date(),
+              }
               : {
-                  defectiveReason: "",
-                  defectiveDescription: "",
-                  defectiveDate: null,
-                },
+                defectiveReason: "",
+                defectiveDescription: "",
+                defectiveDate: null,
+              },
           },
         ],
         { session }
       );
-
       const finishedProduct = created[0];
+
 
       await ProductionHistory.create(
         [
@@ -209,19 +225,18 @@ class ProductionSystem {
             salePrice: Number(productNorma.salePrice),
             defectiveInfo: isDefective
               ? {
-                  defectiveReason,
-                  defectiveDescription,
-                  defectiveDate: new Date(),
-                }
+                defectiveReason,
+                defectiveDescription,
+                defectiveDate: new Date(),
+              }
               : undefined,
           },
         ],
         { session }
       );
-      console.log(productName);
 
+      console.log(productName);
       if (productName.toLowerCase().includes("ruberoid")) {
-        console.log("start");
         await calculateRuberoidSalaries({
           producedCount: quantityToProduce,
           product_id: productNorma._id,
@@ -242,12 +257,10 @@ class ProductionSystem {
           date,
         });
       }
-
       await session.commitTransaction();
       return response.created(
         res,
-        `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${
-          isDefective ? " (Brak sifatida)" : ""
+        `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${isDefective ? " (Brak sifatida)" : ""
         }`,
         {
           totalCost: totalCostSum,
@@ -255,10 +268,10 @@ class ProductionSystem {
           isDefective,
           defectiveInfo: isDefective
             ? {
-                defectiveReason,
-                defectiveDescription,
-                defectiveDate: new Date(),
-              }
+              defectiveReason,
+              defectiveDescription,
+              defectiveDate: new Date(),
+            }
             : undefined,
           totalElectricityUsed,
           totalGasUsed,
@@ -372,8 +385,7 @@ class ProductionSystem {
         session.endSession();
         return response.error(
           res,
-          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${
-            bn3Material?.quantity || 0
+          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${bn3Material?.quantity || 0
           }`
         );
       }

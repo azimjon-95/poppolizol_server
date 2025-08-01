@@ -14,6 +14,7 @@ const SalesController = require("../controller/planSalerController");
 const CategoryProductController = require('../controller/catigory.controller');
 const SaleController = require("../controller/saleCartController"); // Path to your SaleController
 const salaryController = require("../controller/calculateSalary/salaryController");
+const AdditionExpenController = require("../controller/additionExpen.controller");
 // Validations
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
@@ -207,5 +208,16 @@ router.get('/category/:id', CategoryProductController.getById);
 router.put('/category/:id', CategoryProductController.update);
 router.delete('/category/:id', CategoryProductController.delete);
 
+
+/**
+ * ============================
+ *  AdditionExpen Routes
+ * ============================
+ */
+router.post("/addition/expen", AdditionExpenController.create);
+router.get("/addition/expen", AdditionExpenController.getAll);
+router.get("/addition/expen/:id", AdditionExpenController.getById);
+router.put("/addition/expen/:id", AdditionExpenController.update);
+router.delete("/addition/expen/:id", AdditionExpenController.delete);
 
 module.exports = router;
