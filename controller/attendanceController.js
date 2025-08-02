@@ -54,12 +54,31 @@ class AttendanceController {
       }
 
       if (user.role !== "ishlab chiqarish") {
-        await session.abortTransaction();
-        session.endSession();
-        return response.error(
-          res,
-          "Kiritilgan bo‘lim xodimning bo‘limiga mos kelmaydi"
-        );
+        if (user?.role === "boshqa ishchilar") {
+          const result1 = await Attendance.create(
+            [
+              {
+                employee: employeeId,
+                date: new Date(date),
+                percentage,
+                unit,
+              },
+            ],
+            { session }
+          );
+
+          console.log("boshqa ishchilar", result1);
+
+          // TO‘G‘RI: Transaksiyani yakunlash (saqlash)
+          await session.commitTransaction(); // SAQLAYDI
+          session.endSession();
+
+          return response.success(
+            res,
+            "Davomat muvaffaqiyatli saqlandi",
+            result1
+          );
+        }
       }
 
       let realPercentage = percentage;
