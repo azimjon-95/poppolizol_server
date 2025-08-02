@@ -12,6 +12,341 @@ const SalaryRecord = require("../model/salaryRecord");
 const Attendance = require("../model/attendanceModal");
 
 class SaleController {
+  // async createSale(req, res) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     const {
+  //       customer: customerData,
+  //       customerType,
+  //       transport,
+  //       salerId,
+  //       items,
+  //       payment,
+  //     } = req.body;
+
+  //     if (!customerData || !salerId || !items || !payment) {
+  //       await session.abortTransaction();
+  //       return response.error(res, "Barcha maydonlar to'ldirilishi shart");
+  //     }
+
+  //     if (!customerData.name) {
+  //       await session.abortTransaction();
+  //       return response.error(res, "Mijoz ismi kiritilishi shart");
+  //     }
+
+  //     if (payment.totalAmount < payment.paidAmount) {
+  //       await session.abortTransaction();
+  //       return response.error(
+  //         res,
+  //         "To'lov summasi yakuniy summadan oshib ketdi!"
+  //       );
+  //     }
+
+  //     if (payment.paidAmount > 0 && !payment.paymentType) {
+  //       await session.abortTransaction();
+  //       return response.error(res, "To'lov turi kiritilmadi!");
+  //     }
+
+  //     // Verify saler exists
+  //     const employee = await Employee.findById(salerId).session(session);
+  //     if (!employee) {
+  //       await session.abortTransaction();
+  //       return response.notFound(res, "Sotuvchi topilmadi");
+  //     }
+
+  //     // Find or create customer
+  //     let customer = await Customer.findOne({
+  //       $or: [
+  //         { phone: customerData.phone || "" },
+  //         { name: customerData.name, type: customerData.type || "individual" },
+  //       ],
+  //     }).session(session);
+
+  //     if (!customer) {
+  //       customer = new Customer({
+  //         name: customerData.name,
+  //         phone: customerData.phone || "",
+  //         type: customerData.type || "individual",
+  //         companyAddress:
+  //           customerData.type === "company"
+  //             ? customerData.companyAddress
+  //             : undefined,
+  //       });
+  //       await customer.save({ session });
+  //     }
+
+  //     // Handle transport
+  //     if (transport) {
+  //       let transportRecord = await Transport.findOne({ transport }).session(
+  //         session
+  //       );
+  //       if (!transportRecord) {
+  //         transportRecord = new Transport({
+  //           transport,
+  //           balance: payment.transportCost || 0,
+  //         });
+  //       } else {
+  //         transportRecord.balance += payment.transportCost || 0;
+  //       }
+  //       await transportRecord.save({ session });
+  //     }
+
+  //     // Get current month for plan based on current date
+  //     const currentDate = new Date();
+  //     const month = `${currentDate.getFullYear()}.${String(
+  //       currentDate.getMonth() + 1
+  //     ).padStart(2, "0")}`;
+
+  //     // Find plan for current month
+  //     const plan = await Plan.findOne({
+  //       employeeId: salerId,
+  //       month,
+  //     }).session(session);
+
+  //     if (!plan) {
+  //       await session.abortTransaction();
+  //       return response.notFound(
+  //         res,
+  //         `Sotuvchi uchun ${month} oyida plan topilmadi`
+  //       );
+  //     }
+
+  //     // Validate items and add productId
+  //     for (const item of items) {
+  //       const product = await FinishedProduct.findById(item._id).session(
+  //         session
+  //       );
+  //       if (!product) {
+  //         await session.abortTransaction();
+  //         return response.notFound(
+  //           res,
+  //           `Maxsulot topilmadi: ${item.productName}`
+  //         );
+  //       }
+  //       item.productId = item._id; // Add productId to item
+  //     }
+
+  //     // Create new sale
+  //     const newSale = new Salecart({
+  //       customerId: customer._id,
+  //       salerId,
+  //       items,
+  //       payment,
+  //       customerType,
+  //       salesperson: `${employee.firstName} ${employee.lastName}`,
+  //       date: new Date().toLocaleDateString("uz-UZ"),
+  //       time: new Date().toLocaleTimeString("uz-UZ"),
+  //       transport: transport || "",
+  //       isContract: req.body.isContract ?? true,
+  //       deliveryDate: req.body.deliveryDate || null,
+  //     });
+
+  //     // Update balance if there's a payment
+  //     if (payment.paidAmount > 0) {
+  //       const balanceField = payment.paymentType === "naqt" ? "naqt" : "bank";
+  //       await Balance.updateBalance(balanceField, "kirim", payment.paidAmount, {
+  //         session,
+  //       });
+
+  //       // Update plan based on paid amount
+  //       plan.achievedAmount += payment.paidAmount;
+  //       plan.progress = Math.min(
+  //         (plan.achievedAmount / plan.targetAmount) * 100,
+  //         100
+  //       );
+  //       await plan.save({ session });
+  //     }
+
+  //     // Save sale
+  //     const savedSale = await newSale.save({ session });
+
+  //     // Add sale to plan's sales array
+  //     plan.sales.push(savedSale._id);
+  //     await plan.save({ session });
+
+  //     await session.commitTransaction();
+
+  //     // Populate data in response
+  //     const populatedSale = await Salecart.findById(savedSale._id)
+  //       .populate("customerId", "name type phone companyAddress")
+  //       .populate("salerId", "firstName lastName")
+  //       .lean();
+
+  //     return response.created(
+  //       res,
+  //       "Shartnoma muvaffaqiyatli tuzildi!",
+  //       populatedSale
+  //     );
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     return response.serverError(
+  //       res,
+  //       "Sotuvni saqlashda xatolik!",
+  //       error.message
+  //     );
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
+
+  // async deliverProduct(req, res) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     const { saleId, items, transport, transportCost } = req.body;
+
+  //     // 1. Sotuvni topamiz
+  //     const sale = await Salecart.findById(saleId).session(session);
+  //     if (!sale) {
+  //       return response.notFound(res, "Sotuv topilmadi");
+  //     }
+
+  //     for (const item of items) {
+  //       const { productId, quantity } = item;
+
+  //       // 2. Tayyor mahsulotni topib, quantity ni kamaytiramiz
+  //       const product = await FinishedProduct.findById(productId).session(
+  //         session
+  //       );
+  //       if (!product) {
+  //         return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
+  //       }
+
+  //       if (product.quantity < quantity) {
+  //         return response.error(
+  //           res,
+  //           `Mahsulot yetarli emas: ${product.productName}`
+  //         );
+  //       }
+
+  //       product.quantity -= quantity;
+  //       // Validate only modified fields to avoid issues with required fields like returnInfo
+  //       await product.save({ session, validateModifiedOnly: true });
+
+  //       const saleItem = sale.items.find(
+  //         (i) =>
+  //           i.productId &&
+  //           productId &&
+  //           i.productId.toString() === productId.toString()
+  //       );
+
+  //       if (!saleItem) {
+  //         return response.error(
+  //           res,
+  //           `Sotuvda mahsulot topilmadi: ${productId}`
+  //         );
+  //       }
+
+  //       saleItem.deliveredQuantity += quantity;
+  //       saleItem.updatedAt = new Date();
+  //     }
+
+  //     await sale.save({ session });
+
+  //     // -----------------------------------------------------------------
+  //     let today = new Date();
+  //     today.setHours(0, 0, 0, 0); // Faqat sana
+
+  //     // 1. Bugungi SalaryRecord ni topish
+  //     let salaryRecord = await SalaryRecord.findOne({
+  //       date: {
+  //         $gte: new Date(today),
+  //         $lte: new Date(today.getTime() + 86399999), // 23:59:59
+  //       },
+  //       department: "polizol",
+  //     });
+
+  //     // 2. Yuklangan mahsulotlar hisoblash
+  //     const loadedCount = items.reduce((acc, i) => acc + i.quantity, 0);
+  //     const loadAmount = loadedCount * 400;
+
+  //     // 3. Agar mavjud bo‘lmasa — yangi SalaryRecord yaratish (faqat yuklash uchun)
+  //     if (!salaryRecord) {
+  //       // Ehtimol, hali ishlab chiqarilmagan, faqat yuklangan
+  //       const emptyAttendances = await Attendance.find({
+  //         date: {
+  //           $gte: new Date(today),
+  //           $lte: new Date(today.getTime() + 86399999),
+  //         },
+  //         unit: "polizol",
+  //       });
+
+  //       if (emptyAttendances.length === 0) {
+  //         throw new Error(
+  //           "Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi"
+  //         );
+  //       }
+
+  //       const totalPercentage = emptyAttendances.reduce(
+  //         (sum, a) => sum + a.percentage,
+  //         0
+  //       );
+  //       const salaryPerPercent = loadAmount / totalPercentage;
+
+  //       const workers = emptyAttendances.map((a) => ({
+  //         employee: a.employee,
+  //         percentage: a.percentage,
+  //         amount: Math.round(salaryPerPercent * a.percentage),
+  //       }));
+
+  //       salaryRecord = await SalaryRecord.create({
+  //         date: new Date(),
+  //         department: "polizol",
+  //         producedCount: 0,
+  //         loadedCount,
+  //         totalSum: loadAmount,
+  //         salaryPerPercent,
+  //         workers,
+  //       });
+  //     } else {
+  //       // 4. Mavjud bo‘lsa: loadedCount, totalSum yangilanadi, workers qayta hisoblanadi
+
+  //       const todayAttendances = await Attendance.find({
+  //         date: {
+  //           $gte: new Date(today),
+  //           $lte: new Date(today.getTime() + 86399999),
+  //         },
+  //         unit: "polizol",
+  //       });
+
+  //       const totalPercentage = todayAttendances.reduce(
+  //         (sum, a) => sum + a.percentage,
+  //         0
+  //       );
+
+  //       const newLoadedCount = salaryRecord.loadedCount + loadedCount;
+  //       const newTotalSum = salaryRecord.totalSum + loadAmount;
+  //       const newSalaryPerPercent = newTotalSum / totalPercentage;
+
+  //       const updatedWorkers = todayAttendances.map((a) => ({
+  //         employee: a.employee,
+  //         percentage: a.percentage,
+  //         amount: Math.round(newSalaryPerPercent * a.percentage),
+  //       }));
+
+  //       salaryRecord.loadedCount = newLoadedCount;
+  //       salaryRecord.totalSum = newTotalSum;
+  //       salaryRecord.salaryPerPercent = newSalaryPerPercent;
+  //       salaryRecord.workers = updatedWorkers;
+
+  //       await salaryRecord.save();
+  //     }
+
+  //     // -----------------------------------------------------------------
+
+  //     await session.commitTransaction();
+  //     return response.success(res, "Mahsulotlar yetkazib berildi!");
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     return response.serverError(res, "Xatolik yuz berdi", error.message);
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
+
   async createSale(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -20,7 +355,6 @@ class SaleController {
       const {
         customer: customerData,
         customerType,
-        transport,
         salerId,
         items,
         payment,
@@ -38,10 +372,7 @@ class SaleController {
 
       if (payment.totalAmount < payment.paidAmount) {
         await session.abortTransaction();
-        return response.error(
-          res,
-          "To'lov summasi yakuniy summadan oshib ketdi!"
-        );
+        return response.error(res, "To'lov summasi yakuniy summadan oshib ketdi!");
       }
 
       if (payment.paidAmount > 0 && !payment.paymentType) {
@@ -49,14 +380,12 @@ class SaleController {
         return response.error(res, "To'lov turi kiritilmadi!");
       }
 
-      // Verify saler exists
       const employee = await Employee.findById(salerId).session(session);
       if (!employee) {
         await session.abortTransaction();
         return response.notFound(res, "Sotuvchi topilmadi");
       }
 
-      // Find or create customer
       let customer = await Customer.findOne({
         $or: [
           { phone: customerData.phone || "" },
@@ -69,37 +398,14 @@ class SaleController {
           name: customerData.name,
           phone: customerData.phone || "",
           type: customerData.type || "individual",
-          companyAddress:
-            customerData.type === "company"
-              ? customerData.companyAddress
-              : undefined,
+          companyAddress: customerData.type === "company" ? customerData.companyAddress : undefined,
         });
         await customer.save({ session });
       }
 
-      // Handle transport
-      if (transport) {
-        let transportRecord = await Transport.findOne({ transport }).session(
-          session
-        );
-        if (!transportRecord) {
-          transportRecord = new Transport({
-            transport,
-            balance: payment.transportCost || 0,
-          });
-        } else {
-          transportRecord.balance += payment.transportCost || 0;
-        }
-        await transportRecord.save({ session });
-      }
-
-      // Get current month for plan based on current date
       const currentDate = new Date();
-      const month = `${currentDate.getFullYear()}.${String(
-        currentDate.getMonth() + 1
-      ).padStart(2, "0")}`;
+      const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
 
-      // Find plan for current month
       const plan = await Plan.findOne({
         employeeId: salerId,
         month,
@@ -107,28 +413,18 @@ class SaleController {
 
       if (!plan) {
         await session.abortTransaction();
-        return response.notFound(
-          res,
-          `Sotuvchi uchun ${month} oyida plan topilmadi`
-        );
+        return response.notFound(res, `Sotuvchi uchun ${month} oyida plan topilmadi`);
       }
 
-      // Validate items and add productId
       for (const item of items) {
-        const product = await FinishedProduct.findById(item._id).session(
-          session
-        );
+        const product = await FinishedProduct.findById(item._id).session(session);
         if (!product) {
           await session.abortTransaction();
-          return response.notFound(
-            res,
-            `Maxsulot topilmadi: ${item.productName}`
-          );
+          return response.notFound(res, `Maxsulot topilmadi: ${item.productName}`);
         }
-        item.productId = item._id; // Add productId to item
+        item.productId = item._id;
       }
 
-      // Create new sale
       const newSale = new Salecart({
         customerId: customer._id,
         salerId,
@@ -138,54 +434,34 @@ class SaleController {
         salesperson: `${employee.firstName} ${employee.lastName}`,
         date: new Date().toLocaleDateString("uz-UZ"),
         time: new Date().toLocaleTimeString("uz-UZ"),
-        transport: transport || "",
         isContract: req.body.isContract ?? true,
-        deliveryDate: req.body.deliveryDate || null,
       });
 
-      // Update balance if there's a payment
       if (payment.paidAmount > 0) {
         const balanceField = payment.paymentType === "naqt" ? "naqt" : "bank";
-        await Balance.updateBalance(balanceField, "kirim", payment.paidAmount, {
-          session,
-        });
+        await Balance.updateBalance(balanceField, "kirim", payment.paidAmount, { session });
 
-        // Update plan based on paid amount
         plan.achievedAmount += payment.paidAmount;
-        plan.progress = Math.min(
-          (plan.achievedAmount / plan.targetAmount) * 100,
-          100
-        );
+        plan.progress = Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100);
         await plan.save({ session });
       }
 
-      // Save sale
       const savedSale = await newSale.save({ session });
 
-      // Add sale to plan's sales array
       plan.sales.push(savedSale._id);
       await plan.save({ session });
 
       await session.commitTransaction();
 
-      // Populate data in response
       const populatedSale = await Salecart.findById(savedSale._id)
         .populate("customerId", "name type phone companyAddress")
         .populate("salerId", "firstName lastName")
         .lean();
 
-      return response.created(
-        res,
-        "Shartnoma muvaffaqiyatli tuzildi!",
-        populatedSale
-      );
+      return response.created(res, "Shartnoma muvaffaqiyatli tuzildi!", populatedSale);
     } catch (error) {
       await session.abortTransaction();
-      return response.serverError(
-        res,
-        "Sotuvni saqlashda xatolik!",
-        error.message
-      );
+      return response.serverError(res, "Sotuvni saqlashda xatolik!", error.message);
     } finally {
       session.endSession();
     }
@@ -196,94 +472,106 @@ class SaleController {
     session.startTransaction();
 
     try {
-      const { saleId, items } = req.body;
+      const { saleId, items, transport, transportCost } = req.body;
 
-      // 1. Sotuvni topamiz
+      if (!saleId || !items || !transport || transportCost === undefined) {
+        await session.abortTransaction();
+        return response.error(res, "Barcha maydonlar to'ldirilishi shart");
+      }
+
       const sale = await Salecart.findById(saleId).session(session);
       if (!sale) {
+        await session.abortTransaction();
         return response.notFound(res, "Sotuv topilmadi");
       }
+
+      let transportRecord = await Transport.findOne({ transport }).session(session);
+      if (!transportRecord) {
+        transportRecord = new Transport({
+          transport,
+          balance: transportCost,
+        });
+      } else {
+        transportRecord.balance += transportCost;
+      }
+      await transportRecord.save({ session });
 
       for (const item of items) {
         const { productId, quantity } = item;
 
-        // 2. Tayyor mahsulotni topib, quantity ni kamaytiramiz
-        const product = await FinishedProduct.findById(productId).session(
-          session
-        );
+        const product = await FinishedProduct.findById(productId).session(session);
         if (!product) {
+          await session.abortTransaction();
           return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
         }
 
         if (product.quantity < quantity) {
-          return response.error(
-            res,
-            `Mahsulot yetarli emas: ${product.productName}`
-          );
+          await session.abortTransaction();
+          return response.error(res, `Mahsulot yetarli emas: ${product.productName}`);
         }
 
         product.quantity -= quantity;
-        // Validate only modified fields to avoid issues with required fields like returnInfo
         await product.save({ session, validateModifiedOnly: true });
 
         const saleItem = sale.items.find(
-          (i) =>
-            i.productId &&
-            productId &&
-            i.productId.toString() === productId.toString()
+          (i) => i.productId && productId && i.productId.toString() === productId.toString()
         );
 
         if (!saleItem) {
-          return response.error(
-            res,
-            `Sotuvda mahsulot topilmadi: ${productId}`
-          );
+          await session.abortTransaction();
+          return response.error(res, `Sotuvda mahsulot topilmadi: ${productId}`);
+        }
+
+        if (saleItem.deliveredQuantity + quantity > saleItem.quantity) {
+          await session.abortTransaction();
+          return response.error(res, `Yuborilgan mahsulot ${saleItem.productName} uchun buyurtma miqdoridan oshib ketdi`);
         }
 
         saleItem.deliveredQuantity += quantity;
         saleItem.updatedAt = new Date();
+
+        sale.deliveredItems.push({
+          productId,
+          productName: saleItem.productName,
+          deliveredQuantity: quantity,
+          totalAmount: quantity * saleItem.pricePerUnit,
+          transport,
+          transportCost,
+          deliveryDate: new Date(),
+        });
       }
 
       await sale.save({ session });
 
-      // -----------------------------------------------------------------
       let today = new Date();
-      today.setHours(0, 0, 0, 0); // Faqat sana
+      today.setHours(0, 0, 0, 0);
 
-      // 1. Bugungi SalaryRecord ni topish
       let salaryRecord = await SalaryRecord.findOne({
         date: {
           $gte: new Date(today),
-          $lte: new Date(today.getTime() + 86399999), // 23:59:59
+          $lte: new Date(today.getTime() + 86399999),
         },
         department: "polizol",
-      });
+      }).session(session);
 
-      // 2. Yuklangan mahsulotlar hisoblash
       const loadedCount = items.reduce((acc, i) => acc + i.quantity, 0);
       const loadAmount = loadedCount * 400;
 
-      // 3. Agar mavjud bo‘lmasa — yangi SalaryRecord yaratish (faqat yuklash uchun)
       if (!salaryRecord) {
-        // Ehtimol, hali ishlab chiqarilmagan, faqat yuklangan
         const emptyAttendances = await Attendance.find({
           date: {
             $gte: new Date(today),
             $lte: new Date(today.getTime() + 86399999),
           },
           unit: "polizol",
-        });
+        }).session(session);
 
         if (emptyAttendances.length === 0) {
-          throw new Error(
-            "Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi"
-          );
+          await session.abortTransaction();
+          return response.error(res, "Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi");
         }
 
-        const totalPercentage = emptyAttendances.reduce(
-          (sum, a) => sum + a.percentage,
-          0
-        );
+        const totalPercentage = emptyAttendances.reduce((sum, a) => sum + a.percentage, 0);
         const salaryPerPercent = loadAmount / totalPercentage;
 
         const workers = emptyAttendances.map((a) => ({
@@ -292,7 +580,7 @@ class SaleController {
           amount: Math.round(salaryPerPercent * a.percentage),
         }));
 
-        salaryRecord = await SalaryRecord.create({
+        salaryRecord = new SalaryRecord({
           date: new Date(),
           department: "polizol",
           producedCount: 0,
@@ -302,21 +590,15 @@ class SaleController {
           workers,
         });
       } else {
-        // 4. Mavjud bo‘lsa: loadedCount, totalSum yangilanadi, workers qayta hisoblanadi
-
         const todayAttendances = await Attendance.find({
           date: {
             $gte: new Date(today),
             $lte: new Date(today.getTime() + 86399999),
           },
           unit: "polizol",
-        });
+        }).session(session);
 
-        const totalPercentage = todayAttendances.reduce(
-          (sum, a) => sum + a.percentage,
-          0
-        );
-
+        const totalPercentage = todayAttendances.reduce((sum, a) => sum + a.percentage, 0);
         const newLoadedCount = salaryRecord.loadedCount + loadedCount;
         const newTotalSum = salaryRecord.totalSum + loadAmount;
         const newSalaryPerPercent = newTotalSum / totalPercentage;
@@ -331,11 +613,9 @@ class SaleController {
         salaryRecord.totalSum = newTotalSum;
         salaryRecord.salaryPerPercent = newSalaryPerPercent;
         salaryRecord.workers = updatedWorkers;
-
-        await salaryRecord.save();
       }
 
-      // -----------------------------------------------------------------
+      await salaryRecord.save({ session });
 
       await session.commitTransaction();
       return response.success(res, "Mahsulotlar yetkazib berildi!");
@@ -346,6 +626,7 @@ class SaleController {
       session.endSession();
     }
   }
+
   async getSaleById(req, res) {
     try {
       const { id } = req.params;

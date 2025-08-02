@@ -26,6 +26,10 @@ class NormaController {
       if (!productName || !materials) {
         return response.error(res, "Mahsulot nomi, materiallar yoki xarajatlar kiritilmagan");
       }
+      const prodName = await Norma.findOne({ productName })
+      if (prodName) {
+        return response.error(res, "Bunday mahsulot normasi allaqachon mavjud");
+      }
 
       // Fetch factory data
       const factory = await Factory.findOne().select("electricityPrice methaneGasPrice");

@@ -12,13 +12,11 @@ const saleSchema = new mongoose.Schema({
     date: { type: String, required: true, default: () => new Date().toLocaleDateString('uz-UZ') },
     time: { type: String, required: true, default: () => new Date().toLocaleTimeString('uz-UZ') },
     customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', required: true },
-    transport: { type: String, default: '' },
     items: [{
         productName: { type: String, required: true },
-        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'FinishedProduct', required: true }, // Added productId
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'FinishedProduct', required: true },
         category: { type: String, required: true },
         quantity: { type: Number, required: true, min: 1 },
-        deliveredQuantity: { type: Number, default: 0 }, // New field to track delivered quantity
         marketType: { type: String, default: 'tashqi' },
         productionCost: { type: Number, required: true },
         sellingPrice: { type: Number, required: true },
@@ -30,6 +28,15 @@ const saleSchema = new mongoose.Schema({
         size: { type: String, default: 'dona' },
         createdAt: { type: Date, default: Date.now },
         updatedAt: { type: Date, default: Date.now },
+    }],
+    deliveredItems: [{
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'FinishedProduct', required: true },
+        productName: { type: String, required: true },
+        deliveredQuantity: { type: Number, required: true, min: 1 },
+        totalAmount: { type: Number, required: true },
+        transport: { type: String, required: true },
+        transportCost: { type: Number, required: true, min: 0 },
+        deliveryDate: { type: Date, default: Date.now },
     }],
     payment: {
         totalAmount: { type: Number, required: true },
@@ -53,7 +60,6 @@ const saleSchema = new mongoose.Schema({
     salerId: { type: mongoose.Schema.Types.ObjectId, required: true },
     isContract: { type: Boolean, default: true },
     customerType: { type: String, default: "internal" },
-    deliveryDate: { type: Date, default: null },
 }, {
     timestamps: true,
 });
