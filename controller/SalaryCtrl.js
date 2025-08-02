@@ -19,61 +19,7 @@ const response = require("../utils/response");
 //     year,
 //   });
 
-//   if (!salaryPayment) {
-//     const penalties = await Penalty.find({
-//       employeeId,
-//       month,
-//       year,
-//       status: "aktiv",
-//     });
-//     const totalPenalty = penalties.reduce(
-//       (sum, penalty) => sum + penalty.amount,
-//       0
-//     );
-
-//     salaryPayment = new SalaryPayment({
-//       employeeId,
-//       month,
-//       year,
-//       baseSalary: employee.salary,
-//       penaltyAmount: totalPenalty,
-//       totalPaid: 0,
-//       remainingAmount: employee.salary - totalPenalty,
-//     });
-//     await salaryPayment.save();
-//   }
-
-//   const penalties = await Penalty.find({
-//     employeeId,
-//     month,
-//     year,
-//     status: "aktiv",
-//   }).sort({ appliedDate: -1 });
-
-//   return {
-//     employee,
-//     salaryPayment,
-//     penalties,
-//   };
-// };
-
-// ==========================================================================
-
-// const getEmployeeSalaryInfoInternal = async (employeeId, month, year) => {
-//   const employee = await Employee.findById(employeeId).select(
-//     "-password -unitHeadPassword"
-//   );
-//   if (!employee) {
-//     throw new Error("Ishchi topilmadi");
-//   }
-
-//   let salaryPayment = await SalaryPayment.findOne({
-//     employeeId,
-//     month,
-//     year,
-//   });
-
-//   // Jarimalarni olish
+//   // 1. Jarimalar
 //   const penalties = await Penalty.find({
 //     employeeId,
 //     month,
@@ -86,28 +32,62 @@ const response = require("../utils/response");
 //     0
 //   );
 
-//   // === Ishbay ishchi uchun baseSalary hisoblash ===
-//   let calculatedBaseSalary = employee.salary;
+//   // 2. Date oraliqlari
+//   const startDate = new Date(year, month - 1, 1);
+//   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+//   // 3. Income (yuk tushirish) puli
+//   const incomeWorkerPayments = await mongoose.model("Income").aggregate([
+//     {
+//       $match: {
+//         date: { $gte: startDate, $lte: endDate },
+//         "workerPayments.workerId": employee._id,
+//       },
+//     },
+//     { $unwind: "$workerPayments" },
+//     {
+//       $match: {
+//         "workerPayments.workerId": employee._id,
+//       },
+//     },
+//     {
+//       $group: {
+//         _id: null,
+//         total: { $sum: "$workerPayments.payment" },
+//       },
+//     },
+//   ]);
+
+//   const unloadingSalary = incomeWorkerPayments[0]?.total || 0;
+
+//   // 4. Ishbay ishchilar uchun ishlab chiqarishdan kelgan oylik (optimal)
+//   let productionSalary = 0;
+
 //   if (employee.paymentType === "ishbay") {
-//     console.log("ok1");
-
-//     const startDate = new Date(year, month - 1, 1);
-//     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-
 //     const salaryRecords = await mongoose.model("SalaryRecord").find({
-//       department: employee.unit,
+//       // department: employee.unit,
 //       "workers.employee": employee._id,
 //       date: { $gte: startDate, $lte: endDate },
 //     });
 
-//     calculatedBaseSalary = salaryRecords.reduce((sum, record) => {
-//       const worker = record.workers.find(
+//     productionSalary = salaryRecords.reduce((sum, record) => {
+//       const employeeEntries = record.workers.filter(
 //         (w) => w.employee.toString() === employee._id.toString()
 //       );
-//       return sum + (worker?.amount || 0);
+//       const employeeTotal = employeeEntries.reduce(
+//         (s, w) => s + (w.amount || 0),
+//         0
+//       );
+//       return sum + employeeTotal;
 //     }, 0);
 //   }
 
+//   // 5. Yakuniy bazaviy oylik
+//   const calculatedBaseSalary =
+//     (employee.paymentType === "ishbay" ? productionSalary : employee.salary) +
+//     unloadingSalary;
+
+//   // 6. SalaryPayment hujjatini yaratish yoki yangilash
 //   if (!salaryPayment) {
 //     salaryPayment = new SalaryPayment({
 //       employeeId,
@@ -118,9 +98,7 @@ const response = require("../utils/response");
 //       totalPaid: 0,
 //       remainingAmount: calculatedBaseSalary - totalPenalty,
 //     });
-//     console.log("ok1", salaryPayment);
 //   } else {
-//     // Agar mavjud bo‘lsa yangilaymiz (ayniqsa ishbaylar uchun har safar hisoblash muhim)
 //     salaryPayment.baseSalary = calculatedBaseSalary;
 //     salaryPayment.penaltyAmount = totalPenalty;
 //     salaryPayment.remainingAmount =
@@ -191,12 +169,12 @@ const getEmployeeSalaryInfoInternal = async (employeeId, month, year) => {
 
   const unloadingSalary = incomeWorkerPayments[0]?.total || 0;
 
-  // 4. Ishbay ishchilar uchun ishlab chiqarishdan kelgan oylik (optimal)
-  let productionSalary = 0;
+  // 4. Hisoblash: ishbay yoki kunlik bo‘yicha
+  let productionSalary = 0; // faqat ishbay uchun
+  let dailySalary = 0; // faqat kunlik uchun
 
   if (employee.paymentType === "ishbay") {
     const salaryRecords = await mongoose.model("SalaryRecord").find({
-      // department: employee.unit,
       "workers.employee": employee._id,
       date: { $gte: startDate, $lte: endDate },
     });
@@ -213,10 +191,23 @@ const getEmployeeSalaryInfoInternal = async (employeeId, month, year) => {
     }, 0);
   }
 
+  if (employee.paymentType === "kunlik") {
+    const attendances = await mongoose.model("Attendance").find({
+      employee: employee._id,
+      date: { $gte: startDate, $lte: endDate },
+    });
+
+    const totalDays = attendances.length;
+    dailySalary = totalDays * employee.salary; // salary = kunlik stavka
+  }
+
   // 5. Yakuniy bazaviy oylik
   const calculatedBaseSalary =
-    (employee.paymentType === "ishbay" ? productionSalary : employee.salary) +
-    unloadingSalary;
+    (employee.paymentType === "ishbay"
+      ? productionSalary
+      : employee.paymentType === "kunlik"
+      ? dailySalary
+      : employee.salary) + unloadingSalary;
 
   // 6. SalaryPayment hujjatini yaratish yoki yangilash
   if (!salaryPayment) {
@@ -435,51 +426,6 @@ class SalaryService {
     }
   }
 
-  // // Barcha ishchilarning oylik ma'lumotlarini olish
-  // async getAllEmployeesSalaryInfo(req, res) {
-  //   try {
-  //     const { month, year } = req.params;
-  //     const monthNum = parseInt(month);
-  //     const yearNum = parseInt(year);
-
-  //     if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-  //       return response.error(res, "Noto'g'ri oy yoki yil");
-  //     }
-
-  //     const employees = await Employee.find({ paymentType: "oylik" }).select(
-  //       "firstName middleName lastName unit role salary passportSeries"
-  //     );
-
-  //     const salaryInfoPromises = employees.map(async (employee) => {
-  //       const salaryInfo = await getEmployeeSalaryInfoInternal(
-  //         employee._id,
-  //         monthNum,
-  //         yearNum
-  //       );
-  //       return {
-  //         ...employee.toObject(),
-  //         salaryPayment: salaryInfo.salaryPayment,
-  //         penalties: salaryInfo.penalties,
-  //       };
-  //     });
-
-  //     const employeesData = await Promise.all(salaryInfoPromises);
-
-  //     return response.success(
-  //       res,
-  //       "Barcha ishchilarning oylik ma'lumotlari",
-  //       employeesData
-  //     );
-  //   } catch (error) {
-  //     console.error("Get all employees salary info error:", error);
-  //     return response.serverError(
-  //       res,
-  //       "Barcha oylik ma'lumotlarini olishda xatolik",
-  //       error
-  //     );
-  //   }
-  // }
-
   // --------------------------------------------------------
   async getAllEmployeesSalaryInfo(req, res) {
     try {
@@ -493,7 +439,7 @@ class SalaryService {
 
       // Barcha ishchilarni olish
       const allEmployees = await Employee.find({
-        paymentType: { $in: ["oylik", "ishbay"] },
+        paymentType: { $in: ["oylik", "ishbay", "kunlik"] },
       }).select(
         "firstName middleName lastName unit role salary passportSeries paymentType"
       );
@@ -517,7 +463,9 @@ class SalaryService {
 
       // Ikkita turga ajratamiz (agar frontendda kerak bo‘lsa)
       const monthly = allEmployeesData.filter((e) => e.type === "oylik");
-      const daily = allEmployeesData.filter((e) => e.type === "ishbay");
+      const daily = allEmployeesData.filter(
+        (e) => e.type === "ishbay" || e.type === "kunlik"
+      );
 
       return response.success(
         res,
