@@ -146,64 +146,7 @@ class DebtController {
             if (status === "active") debtModelFilter.status = "active";
             const debtModelDebts = await Debt.find(debtModelFilter).lean();
 
-            // Income modelidan qarzlarni olish
-            const incomeDebts = await Income.aggregate([
-                {
-                    $match: {
-                        "debt.remainingAmount": { $gte: 0 },
-                        ...(status === "active"
-                            ? { "debt.status": { $in: ["pending", "partially_paid"] } }
-                            : { "debt.status": { $in: ["pending", "partially_paid", "fully_paid"] } }),
-                        ...(type && { "debt.type": type }),
-                    },
-                },
-                {
-                    $group: {
-                        _id: { firmId: "$firm._id", firmName: "$firm.name" },
-                        totalInitialDebt: { $sum: "$debt.initialAmount" },
-                        totalRemainingDebt: { $sum: "$debt.remainingAmount" },
-                        debtPayments: { $push: "$debt.debtPayments" },
-                        createdAt: { $min: "$createdAt" },
-                        updatedAt: { $max: "$updatedAt" },
-                        dueDate: { $max: "$debt.dueDate" },
-                        type: { $first: "$debt.type" },
-                    },
-                },
-                { $unwind: { path: "$debtPayments", preserveNullAndEmptyArrays: true } },
-                {
-                    $group: {
-                        _id: "$_id",
-                        totalInitialDebt: { $first: "$totalInitialDebt" },
-                        totalRemainingDebt: { $first: "$totalRemainingDebt" },
-                        createdAt: { $first: "$createdAt" },
-                        updatedAt: { $first: "$updatedAt" },
-                        dueDate: { $first: "$dueDate" },
-                        type: { $first: "$type" },
-                        payments: { $push: { $cond: [{ $eq: ["$debtPayments", []] }, [], "$debtPayments"] } },
-                    },
-                },
-                {
-                    $project: {
-                        _id: "$_id.firmId",
-                        type: "$type",
-                        counterparty: "$_id.firmName",
-                        amount: "$totalInitialDebt",
-                        paymentMethod: { $literal: null },
-                        description: { $literal: "Firma qarzi" },
-                        status: { $cond: [{ $gt: ["$totalRemainingDebt", 0] }, "active", "completed"] },
-                        dueDate: "$dueDate",
-                        remainingAmount: "$totalRemainingDebt",
-                        createdAt: 1,
-                        updatedAt: 1,
-                        payments: { $reduce: { input: "$payments", initialValue: [], in: { $concatArrays: ["$$value", "$$this"] } } },
-                        __v: { $literal: 0 },
-                    },
-                },
-                { $sort: { counterparty: 1 } },
-            ]);
-
-            // Qarzlarni birlashtirish va saralash
-            const combinedDebts = [...debtModelDebts, ...incomeDebts].sort(
+            const combinedDebts = [...debtModelDebts].sort(
                 (a, b) => a.counterparty.localeCompare(b.counterparty)
             );
 

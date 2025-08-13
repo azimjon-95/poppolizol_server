@@ -55,7 +55,7 @@ class AdminController {
       const managerialUnits = [
         "polizol ish boshqaruvchi",
         "rubiroid ish boshqaruvchi",
-        "ochisleniya ish boshqaruvchi",
+        "Okisleniya ish boshqaruvchi",
       ];
       if (managerialUnits.includes(unit) && unitHeadPassword) {
         req.body.unitHeadPassword = await bcrypt.hash(unitHeadPassword, 10);
@@ -113,7 +113,7 @@ class AdminController {
       const managerialUnits = [
         "polizol ish boshqaruvchi",
         "rubiroid ish boshqaruvchi",
-        "ochisleniya ish boshqaruvchi",
+        "Okisleniya ish boshqaruvchi",
       ];
       if (managerialUnits.includes(unit) && unitHeadPassword) {
         updateData.unitHeadPassword = await bcrypt.hash(unitHeadPassword, 10);
@@ -218,7 +218,7 @@ class AdminController {
       const managerialUnits = [
         "polizol ish boshqaruvchi",
         "rubiroid ish boshqaruvchi",
-        "ochisleniya ish boshqaruvchi",
+        "Okisleniya ish boshqaruvchi",
       ];
       if (!managerialUnits.includes(unitHead.unit)) {
         return response.error(res, "Bu xodim bo‘lim boshlig‘i emas");
@@ -246,12 +246,12 @@ class AdminController {
   }
 
 
-  async ochisleniyaEmployees(req, res) {
+  async OkisleniyaEmployees(req, res) {
 
     try {
       const employees = await Employee.find({
         unit: {
-          $in: ['ochisleniya', 'ochisleniya ish boshqaruvchi']
+          $in: ['Okisleniya', 'Okisleniya ish boshqaruvchi']
         }
       }).select('-unitHeadPassword');
 

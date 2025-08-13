@@ -67,7 +67,7 @@ debtSchema.statics.createDebt = async function (debtData, session = null) {
     const expenseData = {
         type: type === 'lend' ? 'chiqim' : 'kirim',
         paymentMethod,
-        category: `Debt-${type}`,
+        category: type === "lend" ? "Qar berildi" : "Qar olindi",
         amount,
         description: debtData.description,
         date: new Date(),
@@ -149,3 +149,4 @@ debtSchema.statics.getDebtHistory = async function (type = null, session = null)
 
 const Debt = mongoose.model('Debt', debtSchema);
 module.exports = Debt;
+

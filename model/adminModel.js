@@ -101,8 +101,8 @@ const EmployeeSchema = new mongoose.Schema(
         "polizol ish boshqaruvchi",
         "rubiroid",
         "rubiroid ish boshqaruvchi",
-        "ochisleniya",
-        "ochisleniya ish boshqaruvchi",
+        "Okisleniya",
+        "Okisleniya ish boshqaruvchi",
 
         "boshqa"
       ],

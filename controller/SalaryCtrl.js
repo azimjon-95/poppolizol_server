@@ -3,213 +3,102 @@ const Employee = require("../model/adminModel"); // Admins model
 const SalaryPayment = require("../model/salaryPaymentmodel");
 const Penalty = require("../model/penaltyModel");
 const Expense = require("../model/expenseModel");
+const Balance = require("../model/balance");
 const response = require("../utils/response");
 
-// const getEmployeeSalaryInfoInternal = async (employeeId, month, year) => {
-//   const employee = await Employee.findById(employeeId).select(
-//     "-password -unitHeadPassword"
-//   );
-//   if (!employee) {
-//     throw new Error("Ishchi topilmadi");
-//   }
+const getEmployeeSalaryInfoInternal = async (employeeId, month, year, session = null) => {
+  const employee = await Employee.findById(employeeId).select("-password -unitHeadPassword");
+  if (!employee) throw new Error("Ishchi topilmadi");
 
-//   let salaryPayment = await SalaryPayment.findOne({
-//     employeeId,
-//     month,
-//     year,
-//   });
+  // Avvalgi oylardan qarzlarni o'tkazish (iterativ)
+  let carriedDebt = 0;
+  let tempMonth = month - 1;
+  let tempYear = year;
+  const previousPayments = [];
+  while (true) {
+    if (tempMonth < 1) {
+      tempMonth = 12;
+      tempYear--;
+    }
+    if (tempYear < 2020) break; // Xavfsizlik cheklovi
 
-//   // 1. Jarimalar
-//   const penalties = await Penalty.find({
-//     employeeId,
-//     month,
-//     year,
-//     status: "aktiv",
-//   }).sort({ appliedDate: -1 });
+    const prevSalaryPayment = await SalaryPayment.findOne({
+      employeeId,
+      month: tempMonth,
+      year: tempYear
+    }).session(session);
 
-//   const totalPenalty = penalties.reduce(
-//     (sum, penalty) => sum + penalty.amount,
-//     0
-//   );
+    if (!prevSalaryPayment) break;
+    if (prevSalaryPayment.remainingAmount >= 0 || prevSalaryPayment.status === "qarz_otkazilgan") break;
 
-//   // 2. Date oraliqlari
-//   const startDate = new Date(year, month - 1, 1);
-//   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    carriedDebt += -prevSalaryPayment.remainingAmount;
+    previousPayments.push(prevSalaryPayment);
 
-//   // 3. Income (yuk tushirish) puli
-//   const incomeWorkerPayments = await mongoose.model("Income").aggregate([
-//     {
-//       $match: {
-//         date: { $gte: startDate, $lte: endDate },
-//         "workerPayments.workerId": employee._id,
-//       },
-//     },
-//     { $unwind: "$workerPayments" },
-//     {
-//       $match: {
-//         "workerPayments.workerId": employee._id,
-//       },
-//     },
-//     {
-//       $group: {
-//         _id: null,
-//         total: { $sum: "$workerPayments.payment" },
-//       },
-//     },
-//   ]);
-
-//   const unloadingSalary = incomeWorkerPayments[0]?.total || 0;
-
-//   // 4. Ishbay ishchilar uchun ishlab chiqarishdan kelgan oylik (optimal)
-//   let productionSalary = 0;
-
-//   if (employee.paymentType === "ishbay") {
-//     const salaryRecords = await mongoose.model("SalaryRecord").find({
-//       // department: employee.unit,
-//       "workers.employee": employee._id,
-//       date: { $gte: startDate, $lte: endDate },
-//     });
-
-//     productionSalary = salaryRecords.reduce((sum, record) => {
-//       const employeeEntries = record.workers.filter(
-//         (w) => w.employee.toString() === employee._id.toString()
-//       );
-//       const employeeTotal = employeeEntries.reduce(
-//         (s, w) => s + (w.amount || 0),
-//         0
-//       );
-//       return sum + employeeTotal;
-//     }, 0);
-//   }
-
-//   // 5. Yakuniy bazaviy oylik
-//   const calculatedBaseSalary =
-//     (employee.paymentType === "ishbay" ? productionSalary : employee.salary) +
-//     unloadingSalary;
-
-//   // 6. SalaryPayment hujjatini yaratish yoki yangilash
-//   if (!salaryPayment) {
-//     salaryPayment = new SalaryPayment({
-//       employeeId,
-//       month,
-//       year,
-//       baseSalary: calculatedBaseSalary,
-//       penaltyAmount: totalPenalty,
-//       totalPaid: 0,
-//       remainingAmount: calculatedBaseSalary - totalPenalty,
-//     });
-//   } else {
-//     salaryPayment.baseSalary = calculatedBaseSalary;
-//     salaryPayment.penaltyAmount = totalPenalty;
-//     salaryPayment.remainingAmount =
-//       calculatedBaseSalary - totalPenalty - salaryPayment.totalPaid;
-//   }
-
-//   await salaryPayment.save();
-
-//   return {
-//     employee,
-//     salaryPayment,
-//     penalties,
-//   };
-// };
-
-const getEmployeeSalaryInfoInternal = async (employeeId, month, year) => {
-  const employee = await Employee.findById(employeeId).select(
-    "-password -unitHeadPassword"
-  );
-  if (!employee) {
-    throw new Error("Ishchi topilmadi");
+    tempMonth--;
   }
 
-  let salaryPayment = await SalaryPayment.findOne({
-    employeeId,
-    month,
-    year,
-  });
+  // Avvalgi oylarni yangilash
+  for (const p of previousPayments) {
+    p.remainingAmount = 0;
+    p.status = "qarz_otkazilgan";
+    await p.save({ session });
+  }
 
-  // 1. Jarimalar
+  let salaryPayment = await SalaryPayment.findOne({ employeeId, month, year }).session(session);
+
+  // Jarimalar
   const penalties = await Penalty.find({
     employeeId,
     month,
     year,
-    status: "aktiv",
+    status: "aktiv"
   }).sort({ appliedDate: -1 });
 
-  const totalPenalty = penalties.reduce(
-    (sum, penalty) => sum + penalty.amount,
-    0
-  );
+  const totalPenalty = penalties.reduce((sum, p) => sum + p.amount, 0);
 
-  // 2. Date oraliqlari
+  // Sana oraliqlari
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-  // 3. Income (yuk tushirish) puli
+  // Yuk tushirish puli
   const incomeWorkerPayments = await mongoose.model("Income").aggregate([
-    {
-      $match: {
-        date: { $gte: startDate, $lte: endDate },
-        "workerPayments.workerId": employee._id,
-      },
-    },
+    { $match: { date: { $gte: startDate, $lte: endDate }, "workerPayments.workerId": employee._id } },
     { $unwind: "$workerPayments" },
-    {
-      $match: {
-        "workerPayments.workerId": employee._id,
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        total: { $sum: "$workerPayments.payment" },
-      },
-    },
+    { $match: { "workerPayments.workerId": employee._id } },
+    { $group: { _id: null, total: { $sum: "$workerPayments.payment" } } }
   ]);
-
   const unloadingSalary = incomeWorkerPayments[0]?.total || 0;
 
-  // 4. Hisoblash: ishbay yoki kunlik bo‘yicha
-  let productionSalary = 0; // faqat ishbay uchun
-  let dailySalary = 0; // faqat kunlik uchun
+  // Ishbay / kunlik hisoblash
+  let productionSalary = 0;
+  let dailySalary = 0;
 
   if (employee.paymentType === "ishbay") {
     const salaryRecords = await mongoose.model("SalaryRecord").find({
       "workers.employee": employee._id,
-      date: { $gte: startDate, $lte: endDate },
+      date: { $gte: startDate, $lte: endDate }
     });
 
     productionSalary = salaryRecords.reduce((sum, record) => {
-      const employeeEntries = record.workers.filter(
-        (w) => w.employee.toString() === employee._id.toString()
-      );
-      const employeeTotal = employeeEntries.reduce(
-        (s, w) => s + (w.amount || 0),
-        0
-      );
-      return sum + employeeTotal;
+      const empEntries = record.workers.filter(w => w.employee.toString() === employee._id.toString());
+      return sum + empEntries.reduce((s, w) => s + (w.amount || 0), 0);
     }, 0);
   }
 
   if (employee.paymentType === "kunlik") {
     const attendances = await mongoose.model("Attendance").find({
       employee: employee._id,
-      date: { $gte: startDate, $lte: endDate },
+      date: { $gte: startDate, $lte: endDate }
     });
-
-    const totalDays = attendances.length;
-    dailySalary = totalDays * employee.salary; // salary = kunlik stavka
+    dailySalary = attendances.length * employee.salary;
   }
 
-  // 5. Yakuniy bazaviy oylik
   const calculatedBaseSalary =
-    (employee.paymentType === "ishbay"
-      ? productionSalary
-      : employee.paymentType === "kunlik"
-      ? dailySalary
-      : employee.salary) + unloadingSalary;
+    (employee.paymentType === "ishbay" ? productionSalary :
+      employee.paymentType === "kunlik" ? dailySalary :
+        employee.salary) + unloadingSalary;
 
-  // 6. SalaryPayment hujjatini yaratish yoki yangilash
+  // Yangi hujjat yoki yangilash
   if (!salaryPayment) {
     salaryPayment = new SalaryPayment({
       employeeId,
@@ -218,28 +107,36 @@ const getEmployeeSalaryInfoInternal = async (employeeId, month, year) => {
       baseSalary: calculatedBaseSalary,
       penaltyAmount: totalPenalty,
       totalPaid: 0,
-      remainingAmount: calculatedBaseSalary - totalPenalty,
+      remainingAmount: calculatedBaseSalary - totalPenalty - carriedDebt,
+      advanceDebt: carriedDebt
     });
   } else {
     salaryPayment.baseSalary = calculatedBaseSalary;
     salaryPayment.penaltyAmount = totalPenalty;
+    salaryPayment.advanceDebt = (salaryPayment.advanceDebt || 0) + carriedDebt;
     salaryPayment.remainingAmount =
-      calculatedBaseSalary - totalPenalty - salaryPayment.totalPaid;
+      calculatedBaseSalary - totalPenalty - salaryPayment.totalPaid - salaryPayment.advanceDebt;
   }
 
-  await salaryPayment.save();
+  // Agar advanceDebt bor bo‘lsa va remainingAmount < 0 bo‘lsa — avans qoplanmoqda
+  if (salaryPayment.advanceDebt > 0 || salaryPayment.remainingAmount < 0) {
+    salaryPayment.status = "avans_qoplanmoqda";
+  } else if (salaryPayment.remainingAmount <= 0) {
+    salaryPayment.status = salaryPayment.remainingAmount < 0 ? "ortiqcha_to'langan" : "to'liq_to'langan";
+  } else {
+    salaryPayment.status = "to'liq_to'lanmagan";
+  }
 
-  return {
-    employee,
-    salaryPayment,
-    penalties,
-  };
+  await salaryPayment.save({ session });
+
+  return { employee, salaryPayment, penalties };
 };
 
 const handleOverpaymentInternal = async (
   employeeId,
   currentMonth,
   currentYear,
+  paymentHistory,
   overpaidAmount
 ) => {
   try {
@@ -290,6 +187,7 @@ const handleOverpaymentInternal = async (
       nextMonthSalary.paymentHistory.push({
         amount: overpaidAmount,
         paymentMethod: "transfer",
+        paymentHistory,
         description: `${currentMonth}/${currentYear} oydan o'tkazilgan ortiqcha to'lov`,
         paymentDate: new Date(),
       });
@@ -304,6 +202,7 @@ const handleOverpaymentInternal = async (
       nextMonthSalary.paymentHistory.push({
         amount: overpaidAmount,
         paymentMethod: "transfer",
+        paymentHistory,
         description: `${currentMonth}/${currentYear} oydan o'tkazilgan ortiqcha to'lov`,
         paymentDate: new Date(),
       });
@@ -335,51 +234,11 @@ class SalaryService {
         return response.error(res, "Noto'g'ri employeeId, oy yoki yil");
       }
 
-      const employee = await Employee.findById(employeeId).select(
-        "-password -unitHeadPassword"
+      const { employee, salaryPayment, penalties } = await getEmployeeSalaryInfoInternal(
+        employeeId,
+        monthNum,
+        yearNum
       );
-      if (!employee) {
-        return response.notFound(res, "Ishchi topilmadi");
-      }
-
-      // Oylik to'lov ma'lumotlarini olish
-      let salaryPayment = await SalaryPayment.findOne({
-        employeeId,
-        month: monthNum,
-        year: yearNum,
-      });
-
-      // Agar bu oy uchun yozuv yo'q bo'lsa, yangi yaratish
-      if (!salaryPayment) {
-        const penalties = await Penalty.find({
-          employeeId,
-          month: monthNum,
-          year: yearNum,
-          status: "aktiv",
-        });
-        const totalPenalty = penalties.reduce(
-          (sum, penalty) => sum + penalty.amount,
-          0
-        );
-
-        salaryPayment = new SalaryPayment({
-          employeeId,
-          month: monthNum,
-          year: yearNum,
-          baseSalary: employee.salary,
-          penaltyAmount: totalPenalty,
-          totalPaid: 0,
-          remainingAmount: employee.salary - totalPenalty,
-        });
-        await salaryPayment.save();
-      }
-
-      const penalties = await Penalty.find({
-        employeeId,
-        month: monthNum,
-        year: yearNum,
-        status: "aktiv",
-      }).sort({ appliedDate: -1 });
 
       return response.success(res, "Ishchi oylik ma'lumotlari", {
         employee,
@@ -484,283 +343,96 @@ class SalaryService {
       );
     }
   }
+
   // --------------------------------------------------------
 
-  // Maosh to'lash
-  // async paySalary(req, res) {
-  //   try {
-  //     const {
-  //       employeeId,
-  //       month,
-  //       year,
-  //       amount,
-  //       paymentMethod,
-  //       description = "",
-  //     } = req.body;
-
-  //     if (!employeeId || !month || !year || !amount || !paymentMethod) {
-  //       return response.error(
-  //         res,
-  //         "Barcha majburiy maydonlar to'ldirilishi kerak"
-  //       );
-  //     }
-
-  //     if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-  //       return response.error(res, "Noto'g'ri employeeId");
-  //     }
-
-  //     const monthNum = parseInt(month);
-  //     const yearNum = parseInt(year);
-  //     const paymentAmount = parseFloat(amount);
-
-  //     if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-  //       return response.error(res, "Noto'g'ri oy yoki yil");
-  //     }
-
-  //     if (paymentAmount <= 0) {
-  //       return response.error(res, "To'lov summasi 0 dan katta bo'lishi kerak");
-  //     }
-
-  //     const employee = await Employee.findById(employeeId).select(
-  //       "-password -unitHeadPassword"
-  //     );
-  //     if (!employee) {
-  //       return response.notFound(res, "Ishchi topilmadi");
-  //     }
-
-  //     let salaryPayment = await SalaryPayment.findOne({
-  //       employeeId,
-  //       month: monthNum,
-  //       year: yearNum,
-  //     });
-
-  //     if (!salaryPayment) {
-  //       const penalties = await Penalty.find({
-  //         employeeId,
-  //         month: monthNum,
-  //         year: yearNum,
-  //         status: "aktiv",
-  //       });
-  //       const totalPenalty = penalties.reduce(
-  //         (sum, penalty) => sum + penalty.amount,
-  //         0
-  //       );
-
-  //       salaryPayment = new SalaryPayment({
-  //         employeeId,
-  //         month: monthNum,
-  //         year: yearNum,
-  //         baseSalary: employee.salary,
-  //         penaltyAmount: totalPenalty,
-  //         totalPaid: 0,
-  //         remainingAmount: employee.salary - totalPenalty,
-  //       });
-  //     }
-  //     // ----------------===-=======================-=====
-  //     // Ishbay ishchilar uchun SalaryPayment yaratish
-  //     if (!salaryPayment && employee.paymentType === "ishbay") {
-  //       // SalaryRecord dan oylik summani hisoblash
-  //       const startDate = new Date(yearNum, monthNum - 1, 1);
-  //       const endDate = new Date(yearNum, monthNum, 0, 23, 59, 59, 999);
-
-  //       const salaryRecords = await mongoose.model("SalaryRecord").find({
-  //         department: employee.unit,
-  //         "workers.employee": employee._id,
-  //         date: { $gte: startDate, $lte: endDate },
-  //       });
-
-  //       let totalSalary = 0;
-  //       salaryRecords.forEach((record) => {
-  //         const worker = record.workers.find(
-  //           (w) => w.employee.toString() === employee._id.toString()
-  //         );
-  //         if (worker) {
-  //           totalSalary += worker.amount || 0;
-  //         }
-  //       });
-
-  //       // Jarimalar
-  //       const penalties = await Penalty.find({
-  //         employeeId,
-  //         month: monthNum,
-  //         year: yearNum,
-  //         status: "aktiv",
-  //       });
-  //       const totalPenalty = penalties.reduce(
-  //         (sum, penalty) => sum + penalty.amount,
-  //         0
-  //       );
-
-  //       salaryPayment = new SalaryPayment({
-  //         employeeId,
-  //         month: monthNum,
-  //         year: yearNum,
-  //         baseSalary: totalSalary,
-  //         penaltyAmount: totalPenalty,
-  //         totalPaid: 0,
-  //         remainingAmount: totalSalary - totalPenalty,
-  //       });
-  //     }
-  //     // ----------------===-=======================-=====
-  //     // Expense yozuvini yaratish
-  //     const expense = new Expense({
-  //       relatedId: employeeId.toString(),
-  //       type: "chiqim",
-  //       paymentMethod,
-  //       category: "oylik_maosh",
-  //       amount: paymentAmount,
-  //       description: `${employee.firstName} ${employee.lastName} - ${monthNum}/${yearNum} oy maoshi: ${description}`,
-  //       date: new Date(),
-  //     });
-
-  //     const savedExpense = await expense.save();
-
-  //     // To'lov tarixiga qo'shish
-  //     const newPayment = {
-  //       amount: paymentAmount,
-  //       paymentMethod,
-  //       description,
-  //       expenseId: savedExpense._id,
-  //       paymentDate: new Date(),
-  //     };
-
-  //     salaryPayment.paymentHistory.push(newPayment);
-  //     salaryPayment.totalPaid += paymentAmount;
-  //     salaryPayment.remainingAmount =
-  //       salaryPayment.baseSalary -
-  //       salaryPayment.penaltyAmount -
-  //       salaryPayment.totalPaid;
-
-  //     // Status yangilash
-  //     if (salaryPayment.remainingAmount <= 0) {
-  //       if (salaryPayment.remainingAmount < 0) {
-  //         salaryPayment.status = "ortiqcha_to'langan";
-  //         // Ortiqcha to'langan summani keyingi oyga o'tkazish
-  //         await handleOverpaymentInternal(
-  //           employeeId,
-  //           monthNum,
-  //           yearNum,
-  //           Math.abs(salaryPayment.remainingAmount)
-  //         );
-  //       } else {
-  //         salaryPayment.status = "to'liq_to'langan";
-  //       }
-  //     }
-
-  //     await salaryPayment.save();
-
-  //     return response.success(res, "To'lov muvaffaqiyatli amalga oshirildi", {
-  //       salaryPayment,
-  //       expense: savedExpense,
-  //     });
-  //   } catch (error) {
-  //     console.error("Pay salary error:", error);
-  //     return response.serverError(res, "Maosh to'lashda xatolik", error);
-  //   }
-  // }
-
   async paySalary(req, res) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
     try {
-      const {
-        employeeId,
-        month,
-        year,
-        amount,
-        paymentMethod,
-        description = "",
-      } = req.body;
+      const { employeeId, month, year, amount, paymentMethod, salaryType, description = "" } = req.body;
 
-      if (!employeeId || !month || !year || !amount || !paymentMethod) {
-        return response.error(
-          res,
-          "Barcha majburiy maydonlar to'ldirilishi kerak"
-        );
-      }
-
-      if (!mongoose.Types.ObjectId.isValid(employeeId)) {
-        return response.error(res, "Noto'g'ri employeeId");
+      if (!employeeId || !month || !year || !amount || !paymentMethod || !salaryType) {
+        return response.error(res, "Barcha majburiy maydonlar to'ldirilishi kerak");
       }
 
       const monthNum = parseInt(month);
       const yearNum = parseInt(year);
       const paymentAmount = parseFloat(amount);
 
-      if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
-        return response.error(res, "Noto'g'ri oy yoki yil");
-      }
-
       if (paymentAmount <= 0) {
         return response.error(res, "To'lov summasi 0 dan katta bo'lishi kerak");
       }
 
-      // 👉 Ishchi va SalaryPayment ma'lumotlarini olish (har doim yangilanadi)
-      const { employee, salaryPayment } = await getEmployeeSalaryInfoInternal(
-        employeeId,
-        monthNum,
-        yearNum
-      );
+      const { employee, salaryPayment } = await getEmployeeSalaryInfoInternal(employeeId, monthNum, yearNum, session);
 
-      // ✅ Chiqim yozuvini yaratish
+      // Avans bo‘lsa — advanceDebt ga qo‘shiladi
+      if (salaryType === "avans") {
+        salaryPayment.advanceDebt += paymentAmount;
+        salaryPayment.remainingAmount -= paymentAmount;
+        salaryPayment.status = "avans_qoplanmoqda";
+      } else {
+        // Oddiy oylik to‘lash
+        salaryPayment.totalPaid += paymentAmount;
+        salaryPayment.remainingAmount =
+          salaryPayment.baseSalary - salaryPayment.penaltyAmount - salaryPayment.totalPaid - salaryPayment.advanceDebt;
+
+        // Agar avans qarzi mavjud bo‘lsa, to‘lov avval qarzga ketadi
+        if (salaryPayment.advanceDebt > 0) {
+          const debtCover = Math.min(paymentAmount, salaryPayment.advanceDebt);
+          salaryPayment.advanceDebt -= debtCover;
+          if (salaryPayment.advanceDebt <= 0 && salaryPayment.remainingAmount <= 0) {
+            salaryPayment.status = "to'liq_to'langan";
+          }
+        } else if (salaryPayment.remainingAmount <= 0) {
+          salaryPayment.status = salaryPayment.remainingAmount < 0 ? "ortiqcha_to'langan" : "to'liq_to'langan";
+        }
+      }
+
+      // Pul balansidan chiqim
+      await Balance.updateBalance(paymentMethod, "chiqim", paymentAmount, session);
+
+      // Expense yozuvi
       const expense = new Expense({
         relatedId: employeeId.toString(),
         type: "chiqim",
         paymentMethod,
-        category: "oylik_maosh",
+        category: salaryType === "oylik" ? "Oylik maosh" : "Avans",
         amount: paymentAmount,
-        description: `${employee.firstName} ${employee.lastName} - ${monthNum}/${yearNum} oy maoshi: ${description}`,
+        description: `${employee.firstName} ${employee.lastName} - ${monthNum}/${yearNum} ${salaryType}: ${description}`,
         date: new Date(),
       });
 
-      const savedExpense = await expense.save();
+      const savedExpense = await expense.save({ session });
 
-      // ✅ To'lovni qo‘shish
-      const newPayment = {
+      // Payment tarixiga qo‘shish
+      salaryPayment.paymentHistory.push({
         amount: paymentAmount,
         paymentMethod,
+        salaryType,
         description,
         expenseId: savedExpense._id,
-        paymentDate: new Date(),
-      };
-
-      salaryPayment.paymentHistory.push(newPayment);
-      salaryPayment.totalPaid += paymentAmount;
-      salaryPayment.remainingAmount =
-        salaryPayment.baseSalary -
-        salaryPayment.penaltyAmount -
-        salaryPayment.totalPaid;
-
-      // ✅ Statusni yangilash
-      if (salaryPayment.remainingAmount <= 0) {
-        if (salaryPayment.remainingAmount < 0) {
-          salaryPayment.status = "ortiqcha_to'langan";
-
-          await handleOverpaymentInternal(
-            employeeId,
-            monthNum,
-            yearNum,
-            Math.abs(salaryPayment.remainingAmount)
-          );
-        } else {
-          salaryPayment.status = "to'liq_to'langan";
-        }
-      }
-
-      await salaryPayment.save();
-
-      return response.success(res, "To'lov muvaffaqiyatli amalga oshirildi", {
-        salaryPayment,
-        expense: savedExpense,
+        paymentDate: new Date()
       });
+
+      await salaryPayment.save({ session });
+
+      await session.commitTransaction();
+      return response.success(res, "To'lov muvaffaqiyatli amalga oshirildi", { salaryPayment, expense: savedExpense });
+
     } catch (error) {
+      await session.abortTransaction();
       console.error("Pay salary error:", error);
       return response.serverError(res, "Maosh to'lashda xatolik", error);
+    } finally {
+      session.endSession();
     }
   }
 
   // Ortiqcha to'lovni keyingi oyga o'tkazish
   async handleOverpayment(req, res) {
     try {
-      const { employeeId, month, year, overpaidAmount } = req.body;
+      const { employeeId, month, year, overpaidAmount, paymentHistory } = req.body;
 
       if (!employeeId || !month || !year || !overpaidAmount) {
         return response.error(
@@ -792,6 +464,7 @@ class SalaryService {
         employeeId,
         monthNum,
         yearNum,
+        paymentHistory,
         overpaid
       );
 
@@ -810,49 +483,49 @@ class SalaryService {
     }
   }
 
-  // Internal helper for handleOverpayment
-
   // Jarima qo'shish
   async addPenalty(req, res) {
     try {
-      const {
-        employeeId,
-        amount,
-        reason,
-        penaltyType,
-        month,
-        year,
-        createdBy,
-      } = req.body;
+      // Extract data from request body
+      const { amount, appliedDate: createdBy, penaltyType, reason } = req.body.penaltyData || {};
+      const { employeeId } = req.body;
 
-      if (!employeeId || !amount || !reason || !month || !year || !createdBy) {
-        return response.error(
-          res,
-          "Barcha majburiy maydonlar to'ldirilishi kerak"
-        );
+      // Validate required fields
+      if (!employeeId || !amount || !reason || !createdBy) {
+        return response.error(res, "Barcha majburiy maydonlar to'ldirilishi kerak");
       }
 
+      // Validate employeeId
       if (!mongoose.Types.ObjectId.isValid(employeeId)) {
         return response.error(res, "Noto'g'ri employeeId");
       }
 
-      const monthNum = parseInt(month);
-      const yearNum = parseInt(year);
-      const penaltyAmount = parseFloat(amount);
+      // Parse createdBy date to extract month and year
+      const appliedDate = new Date(createdBy);
+      if (isNaN(appliedDate)) {
+        return response.error(res, "Noto'g'ri sana formati");
+      }
+      const monthNum = appliedDate.getMonth() + 1; // getMonth() returns 0-11, so add 1
+      const yearNum = appliedDate.getFullYear();
 
+      // Validate month and year
       if (monthNum < 1 || monthNum > 12 || yearNum < 2020) {
         return response.error(res, "Noto'g'ri oy yoki yil");
       }
 
+      // Parse and validate penalty amount
+      const penaltyAmount = parseFloat(amount);
       if (penaltyAmount <= 0) {
         return response.error(res, "Jarima summasi 0 dan katta bo'lishi kerak");
       }
 
+      // Check if employee exists
       const employee = await Employee.findById(employeeId);
       if (!employee) {
         return response.notFound(res, "Ishchi topilmadi");
       }
 
+      // Create penalty record
       const penaltyData = {
         employeeId,
         amount: penaltyAmount,
@@ -861,14 +534,14 @@ class SalaryService {
         month: monthNum,
         year: yearNum,
         createdBy,
-        appliedDate: new Date(),
+        appliedDate: appliedDate,
         status: "aktiv",
       };
 
       const penalty = new Penalty(penaltyData);
       await penalty.save();
 
-      // Tegishli oylik ma'lumotlarni yangilash
+      // Update or create salary payment record
       let salaryPayment = await SalaryPayment.findOne({
         employeeId,
         month: monthNum,
@@ -876,12 +549,35 @@ class SalaryService {
       });
 
       if (salaryPayment) {
-        salaryPayment.penaltyAmount =
-          (salaryPayment.penaltyAmount || 0) + penaltyAmount;
+        // Update existing salary payment
+        salaryPayment.penaltyAmount = (salaryPayment.penaltyAmount || 0) + penaltyAmount;
         salaryPayment.remainingAmount =
-          salaryPayment.baseSalary -
-          salaryPayment.penaltyAmount -
-          salaryPayment.totalPaid;
+          salaryPayment.baseSalary - salaryPayment.penaltyAmount - salaryPayment.totalPaid - salaryPayment.advanceDebt;
+
+        // Update status based on remaining amount
+        if (salaryPayment.advanceDebt > 0 || salaryPayment.remainingAmount < 0) {
+          salaryPayment.status = "avans_qoplanmoqda";
+        } else if (salaryPayment.remainingAmount > 0) {
+          salaryPayment.status = "to'liq_to'lanmagan";
+        } else if (salaryPayment.remainingAmount === 0) {
+          salaryPayment.status = "to'liq_to'langan";
+        } else {
+          salaryPayment.status = "ortiqcha_to'langan";
+        }
+
+        await salaryPayment.save();
+      } else {
+        // Create new salary payment record
+        salaryPayment = new SalaryPayment({
+          employeeId,
+          month: monthNum,
+          year: yearNum,
+          baseSalary: 0, // Adjust to fetch from Employee or req.body if needed
+          penaltyAmount,
+          totalPaid: 0,
+          remainingAmount: -penaltyAmount,
+          status: "to'liq_to'lanmagan",
+        });
         await salaryPayment.save();
       }
 
@@ -946,6 +642,68 @@ class SalaryService {
       );
     }
   }
+
+
+
+  async getEmployeeFinanceHistory(req, res) {
+    try {
+      const { employeeId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+        return response.error(res, "Noto'g'ri employeeId");
+      }
+
+      // To'lovlar (SalaryPayment.paymentHistory)
+      const salaryData = await SalaryPayment.find({
+        employeeId,
+      }).select('paymentHistory');
+
+      let payments = [];
+      salaryData.forEach(salary => {
+        salary.paymentHistory.forEach(ph => {
+          payments.push({
+            type: 'payment',
+            amount: ph.amount,
+            paymentMethod: ph.paymentMethod,
+            salaryType: ph.salaryType,
+            description: ph.description,
+            date: ph.paymentDate
+          });
+
+        });
+      });
+
+      // Jarimalar
+      const penalties = await Penalty.find({
+        employeeId,
+      }).select('amount reason penaltyType status appliedDate');
+
+      let penaltyList = penalties.map(p => ({
+        type: 'penalty',
+        amount: p.amount,
+        reason: p.reason,
+        penaltyType: p.penaltyType,
+        status: p.status,
+        date: p.appliedDate
+      }));
+
+      // Birlashtirish va sanaga ko'ra tartiblash
+      let checklist = [...payments, ...penaltyList];
+      checklist.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      // return checklist;
+
+      return response.success(res, "Oylik hisobot", checklist);
+
+    } catch (error) {
+      console.error("Get employee finance history error:", error);
+      return response.serverError(
+        res,
+        "Oylik hisobotini olishda xatolik",
+        error
+      );
+    }
+  }
+
 }
 
 module.exports = new SalaryService();

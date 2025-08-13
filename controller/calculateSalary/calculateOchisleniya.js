@@ -6,16 +6,16 @@ const calculateOchisleniya = async (btm3, btm5, inputDate, session = null) => {
   targetDate.setHours(0, 0, 0, 0);
   const endOfDay = new Date(targetDate.getTime() + 86399999);
 
-  // 1. Davomat olish (faqat ochisleniya bo‘limi)
+  // 1. Davomat olish (faqat Okisleniya bo‘limi)
   const attendances = await Attendance.find({
     date: { $gte: targetDate, $lte: endOfDay },
-    unit: "ochisleniya",
+    unit: "Okisleniya",
   })
     .populate("employee")
     .session(session);
 
   if (attendances.length === 0) {
-    console.log("Davomat topilmadi: ochisleniya");
+    console.log("Davomat topilmadi: Okisleniya");
     return null;
   }
 
@@ -39,7 +39,7 @@ const calculateOchisleniya = async (btm3, btm5, inputDate, session = null) => {
   // 5. SalaryRecord bor yoki yo‘qligini tekshirish
   let salaryRecord = await SalaryRecord.findOne({
     date: { $gte: targetDate, $lte: endOfDay },
-    department: "ochisleniya",
+    department: "Okisleniya",
   }).session(session);
 
   if (salaryRecord) {
@@ -57,7 +57,7 @@ const calculateOchisleniya = async (btm3, btm5, inputDate, session = null) => {
       [
         {
           date: targetDate,
-          department: "ochisleniya",
+          department: "Okisleniya",
           producedCount: btm3,
           loadedCount: btm5,
           totalSum: totalSalary,
@@ -78,22 +78,22 @@ const reCalculateBtm5Sale = async (btm5_sale, inputDate, session = null) => {
     targetDate.setHours(0, 0, 0, 0);
     const endOfDay = new Date(targetDate.getTime() + 86399999);
 
-    // 1. Davomat olish (faqat ochisleniya bo‘limi)
+    // 1. Davomat olish (faqat Okisleniya bo‘limi)
     const attendances = await Attendance.find({
       date: { $gte: targetDate, $lte: endOfDay },
-      unit: "ochisleniya",
+      unit: "Okisleniya",
     })
       .populate("employee")
       .session(session);
 
     if (attendances.length === 0) {
-      console.log("Davomat topilmadi: ochisleniya");
+      console.log("Davomat topilmadi: Okisleniya");
       return null;
     }
 
     let salaryRecord = await SalaryRecord.findOne({
       date: { $gte: targetDate, $lte: endOfDay },
-      department: "ochisleniya",
+      department: "Okisleniya",
     }).session(session);
 
     // 3. Umumiy foiz
@@ -123,7 +123,7 @@ const reCalculateBtm5Sale = async (btm5_sale, inputDate, session = null) => {
         [
           {
             date: targetDate,
-            department: "ochisleniya",
+            department: "Okisleniya",
             btm_5_sale: btm5_sale,
             totalSum: totalPrice,
             salaryPerPercent,

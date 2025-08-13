@@ -67,8 +67,6 @@ class AttendanceController {
             { session }
           );
 
-          console.log("boshqa ishchilar", result1);
-
           // TO‘G‘RI: Transaksiyani yakunlash (saqlash)
           await session.commitTransaction(); // SAQLAYDI
           session.endSession();
@@ -85,7 +83,7 @@ class AttendanceController {
       const managerialUnits = [
         "polizol ish boshqaruvchi",
         "rubiroid ish boshqaruvchi",
-        "ochisleniya ish boshqaruvchi",
+        "Okisleniya ish boshqaruvchi",
       ];
       if (managerialUnits.includes(user.unit)) {
         realPercentage = +(Number(percentage) + 0.2).toFixed(2);
@@ -134,7 +132,6 @@ class AttendanceController {
         });
 
         if (!salaryRecord) {
-          console.log("if");
           let result = await SalaryRecord.create(
             [
               {
@@ -155,9 +152,7 @@ class AttendanceController {
             ],
             { session }
           );
-          console.log(result);
         } else {
-          console.log("else");
           const todayAttendances = await Attendance.find({
             date: { $gte: today, $lte: endOfDay },
             unit: unit,
@@ -183,7 +178,7 @@ class AttendanceController {
 
           salaryRecord.totalSum = totalSum;
           salaryRecord.salaryPerPercent = salaryPerPercent;
-          console.log(">>", salaryRecord);
+
 
           await salaryRecord.save({ session });
         }
@@ -248,8 +243,8 @@ class AttendanceController {
         "polizol ish boshqaruvchi",
         "rubiroid",
         "rubiroid ish boshqaruvchi",
-        "ochisleniya",
-        "ochisleniya ish boshqaruvchi",
+        "Okisleniya",
+        "Okisleniya ish boshqaruvchi",
         "boshqa",
       ];
       if (!validUnits.includes(unit)) {
@@ -275,7 +270,7 @@ class AttendanceController {
       const managerialUnits = [
         "polizol ish boshqaruvchi",
         "rubiroid ish boshqaruvchi",
-        "ochisleniya ish boshqaruvchi",
+        "Okisleniya ish boshqaruvchi",
       ];
       if (managerialUnits.includes(attendance.employee.unit)) {
         realPercentage = +(Number(percentage) + 0.2).toFixed(2);

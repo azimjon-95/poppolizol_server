@@ -10,6 +10,10 @@ const IncomeSchema = new mongoose.Schema(
       },
       required: true,
     },
+    firmId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Firm"
+    },
     materials: [
       {
         category: { type: String },
@@ -65,3 +69,5 @@ const IncomeSchema = new mongoose.Schema(
 
 const Income = mongoose.model("Income", IncomeSchema);
 module.exports = Income;
+
+

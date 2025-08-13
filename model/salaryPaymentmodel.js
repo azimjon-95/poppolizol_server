@@ -43,8 +43,19 @@ const salaryPaymentSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['to\'liq_to\'lanmagan', 'to\'liq_to\'langan', 'ortiqcha_to\'langan'],
-        default: 'to\'liq_to\'lanmagan'
+        enum: [
+            "to'liq_to'lanmagan",
+            "to'liq_to'langan",
+            "ortiqcha_to'langan",
+            "avans_qoplanmoqda",
+            "qarz_otkazilgan"
+        ],
+        default: "to'liq_to'lanmagan"
+    },
+    advanceDebt: { // Avans qarzi
+        type: Number,
+        default: 0,
+        min: 0
     },
     paymentHistory: [{
         amount: {
@@ -57,8 +68,12 @@ const salaryPaymentSchema = new mongoose.Schema({
         },
         paymentMethod: {
             type: String,
-            enum: ['naqt', 'bank', 'dollar'],
+            enum: ['naqt', 'bank'],
             required: true
+        },
+        salaryType: {
+            type: String,
+            enum: ["avans", "oylik"],
         },
         description: {
             type: String,
@@ -83,3 +98,5 @@ salaryPaymentSchema.index({ status: 1 });
 
 const SalaryPayment = mongoose.model('SalaryPayment', salaryPaymentSchema);
 module.exports = SalaryPayment;
+
+

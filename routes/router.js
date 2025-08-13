@@ -15,6 +15,7 @@ const CategoryProductController = require('../controller/catigory.controller');
 const SaleController = require("../controller/saleCartController"); // Path to your SaleController
 const salaryController = require("../controller/calculateSalary/salaryController");
 const AdditionExpenController = require("../controller/additionExpen.controller");
+const FirmService = require("../controller/firmaCtrl");
 // Validations
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
@@ -102,7 +103,7 @@ router.post("/admin/pin", adminController.loginUnitHead);
 router.post("/admin/create", adminValidation, adminController.createEmployee);
 router.get("/admin/all", adminController.getEmployees);
 router.get("/admin/:id", adminController.getEmployeeById);
-router.get("/ochisleniya", adminController.ochisleniyaEmployees);
+router.get("/Okisleniya", adminController.OkisleniyaEmployees);
 router.get("/productionEmployees", adminController.getProductionEmployees);
 router.put(
   "/admin/update/:id",
@@ -141,7 +142,10 @@ router.get(
   SalaryService.getEmployeePenalties
 );
 router.post("/overpayment", SalaryService.handleOverpayment);
-
+// getEmployeeFinanceHistory
+router.get("/finance-history/:employeeId",
+  SalaryService.getEmployeeFinanceHistory
+);
 /**
  * ============================
  * Salar Cart Routes
@@ -219,5 +223,13 @@ router.get("/addition/expen", AdditionExpenController.getAll);
 router.get("/addition/expen/:id", AdditionExpenController.getById);
 router.put("/addition/expen/:id", AdditionExpenController.update);
 router.delete("/addition/expen/:id", AdditionExpenController.delete);
+
+
+/**
+ * ============================
+ * Firm Routes
+ * ============================
+ */
+router.post("/process-payment", FirmService.processCompanyPayment);
 
 module.exports = router;

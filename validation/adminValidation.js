@@ -109,8 +109,8 @@ const employeeValidation = (req, res, next) => {
           "polizol ish boshqaruvchi",
           "rubiroid",
           "rubiroid ish boshqaruvchi",
-          "ochisleniya",
-          "ochisleniya ish boshqaruvchi",
+          "Okisleniya",
+          "Okisleniya ish boshqaruvchi",
           "boshqa",
         ],
         errorMessage: "Bo‘lim noto‘g‘ri (mavjud bo‘limlardan birini tanlang)",
@@ -158,7 +158,7 @@ const employeeValidation = (req, res, next) => {
             enum: [
               "polizol ish boshqaruvchi",
               "rubiroid ish boshqaruvchi",
-              "ochisleniya ish boshqaruvchi",
+              "Okisleniya ish boshqaruvchi",
             ],
           },
         },
@@ -179,7 +179,7 @@ const employeeValidation = (req, res, next) => {
               enum: [
                 "polizol ish boshqaruvchi",
                 "rubiroid ish boshqaruvchi",
-                "ochisleniya ish boshqaruvchi",
+                "Okisleniya ish boshqaruvchi",
               ],
             },
           },
