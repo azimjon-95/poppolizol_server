@@ -111,9 +111,13 @@ const getEmployeeSalaryInfoInternal = async (employeeId, month, year, session = 
       advanceDebt: carriedDebt
     });
   } else {
+    // Yangi qarz qo‘shilmasin, faqat eski qarz o‘zgarishsiz qoladi
+    if (!salaryPayment.advanceDebt || salaryPayment.advanceDebt === 0) {
+      salaryPayment.advanceDebt = carriedDebt;
+    }
+
     salaryPayment.baseSalary = calculatedBaseSalary;
     salaryPayment.penaltyAmount = totalPenalty;
-    salaryPayment.advanceDebt = (salaryPayment.advanceDebt || 0) + carriedDebt;
     salaryPayment.remainingAmount =
       calculatedBaseSalary - totalPenalty - salaryPayment.totalPaid - salaryPayment.advanceDebt;
   }
@@ -255,37 +259,7 @@ class SalaryService {
     }
   }
 
-  // Ishchi jarimalarini olish
-  async getEmployeePenalties(req, res) {
-    try {
-      const { employeeId, month, year } = req.params;
-      const monthNum = parseInt(month);
-      const yearNum = parseInt(year);
 
-      if (
-        !mongoose.Types.ObjectId.isValid(employeeId) ||
-        monthNum < 1 ||
-        monthNum > 12 ||
-        yearNum < 2020
-      ) {
-        return response.error(res, "Noto'g'ri employeeId, oy yoki yil");
-      }
-
-      const penalties = await Penalty.find({
-        employeeId,
-        month: monthNum,
-        year: yearNum,
-        status: "aktiv",
-      }).sort({ appliedDate: -1 });
-
-      return response.success(res, "Ishchi jarimalari", penalties);
-    } catch (error) {
-      console.error("Get employee penalties error:", error);
-      return response.serverError(res, "Jarimalarni olishda xatolik", error);
-    }
-  }
-
-  // --------------------------------------------------------
   async getAllEmployeesSalaryInfo(req, res) {
     try {
       const { month, year } = req.params;
@@ -344,7 +318,38 @@ class SalaryService {
     }
   }
 
-  // --------------------------------------------------------
+
+
+  // Ishchi jarimalarini olish
+  async getEmployeePenalties(req, res) {
+    try {
+      const { employeeId, month, year } = req.params;
+      const monthNum = parseInt(month);
+      const yearNum = parseInt(year);
+
+      if (
+        !mongoose.Types.ObjectId.isValid(employeeId) ||
+        monthNum < 1 ||
+        monthNum > 12 ||
+        yearNum < 2020
+      ) {
+        return response.error(res, "Noto'g'ri employeeId, oy yoki yil");
+      }
+
+      const penalties = await Penalty.find({
+        employeeId,
+        month: monthNum,
+        year: yearNum,
+        status: "aktiv",
+      }).sort({ appliedDate: -1 });
+
+      return response.success(res, "Ishchi jarimalari", penalties);
+    } catch (error) {
+      console.error("Get employee penalties error:", error);
+      return response.serverError(res, "Jarimalarni olishda xatolik", error);
+    }
+  }
+
 
   async paySalary(req, res) {
     const session = await mongoose.startSession();

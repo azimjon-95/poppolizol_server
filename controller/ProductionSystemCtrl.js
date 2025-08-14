@@ -2,6 +2,8 @@ const Material = require("../model/wherehouseModel");
 const { Product, Factory, AdditionExpen } = require("../model/factoryModel");
 const ProductNorma = require("../model/productNormaSchema");
 const FinishedProduct = require("../model/finishedProductModel");
+const Admins = require("../model/adminModel");
+const Expense = require("../model/expenseModel");
 const ProductionHistory = require("../model/ProductionHistoryModel");
 const Inventory = require("../model/inventoryHistoryModel");
 const response = require("../utils/response");
@@ -47,15 +49,80 @@ class ProductionSystem {
         return response.error(res, "Mahsulot normasi yoki miqdori noto‘g‘ri");
       }
 
-      // Fetch additional expenses
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // 1. Bugungi kun chiqimlarini olish
+      let expenses = await Expense.find({
+        type: 'chiqim',
+        category: {
+          $in: [
+            'Oziq ovqat xarajatlari',
+            'Transport xarajatlari',
+            'Ofis xarajatlari',
+            'Uskuna ta’miri',
+            'Internet va aloqa',
+            'exnik xizmat',
+            'Eksport xarajatlari',
+            'Yer solig‘i',
+            'IT xizmatlar (dasturiy ta’minot)',
+            "Qarz to'lovi",
+            'Avans',
+            'Kadrlar o‘qitish / trening',
+            'Komandirovka xarajatlari',
+            'Suv / kanalizatsiya tizimi xizmatlari',
+            'Chiqindilar utilizatsiyasi',
+            'Litsenziya va ruxsatnomalar',
+            'Texnik xizmat',
+            'Reklama xarajatlari',
+            'Transport',
+            'Ishlab chiqarish vositalari xaridi',
+            'Ofis mebellari va texnikasi',
+            'Moliyaviy xizmatlar (bank, auditor)',
+            'Bank xizmatlari',
+            'Sud va yuridik xarajatlar',
+            'USTA va Qurilish ishlari',
+            'Ish/chik.xarajatlari',
+            'Boshqa xarajatlar (Prochi)',
+            'Buxgalteriya xizmati',
+            'Soliqlar va majburiy to‘lov',
+            'Avto Qora xarajati',
+            'Oylik maosh'
+          ]
+        },
+        createdAt: { $gte: today, $lt: tomorrow }
+      }).session(session);
+
+      // 2. Filtrlash — Avans va Oylik maosh larida ishlab chiqarish xodimlarini chiqarib tashlash
+      const filteredExpenses = [];
+
+      for (const exp of expenses) {
+        if (['Avans', 'Oylik maosh', 'Ish haqi xarajatlari'].includes(exp.category)) {
+          if (exp.relatedId) {
+            const employee = await Admins.findById(exp.relatedId).lean();
+            if (!employee || employee.role !== 'ishlab chiqarish') {
+              filteredExpenses.push(exp);
+            }
+          } else {
+            filteredExpenses.push(exp); // relatedId yo‘q bo‘lsa ham qo‘shamiz
+          }
+        } else {
+          filteredExpenses.push(exp);
+        }
+      }
+
+      const totalAmount = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
+
+
       const [additionExpen] = await AdditionExpen.find().session(session);
       if (!additionExpen) {
         return response.notFound(res, "Tannarx va boshqa xarajatlari topilmadi!");
       }
 
-      const periodic = 1300000;
-      const additional = 1300000;
-      const periodicAmount = (periodic * additionExpen.periodicExpenses) / 100;
+      const additional = totalAmount || 0;
       const additionalAmount = (additional * additionExpen.additionalExpenses) / 100;
 
       // Fetch factory and product pricing
@@ -141,7 +208,6 @@ class ProductionSystem {
         totalElectricityCost +
         totalWorkerCost +
         totalLoadingCost +
-        periodicAmount +
         additionalAmount
       ).toFixed(2));
 
