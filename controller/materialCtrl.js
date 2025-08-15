@@ -368,10 +368,9 @@ class MaterialService {
                 creditUsed = Math.min(-oldDebt, finalTotalWithoutVat - finalPrice);
             }
 
-            const debtDifference = finalTotalWithoutVat - finalPrice;
             await Firm.findByIdAndUpdate(
                 firmData._id,
-                { $inc: { debt: debtDifference } },
+                { $inc: { debt: totalWithVat } },
                 { new: true, session }
             );
 
@@ -628,7 +627,7 @@ class MaterialService {
 
 
             const bn = await FinishedProduct.find({
-                productName: { $in: ["Qop", "Stakan kichik", "Stakan katta"] },
+                productName: { $in: ["BN-5 Qop", "Stakan kichik", "Stakan katta"] },
             });
             const data = {
                 bn,

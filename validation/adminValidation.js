@@ -208,11 +208,8 @@ const employeeValidation = (req, res, next) => {
   const valid = validate(req.body);
 
   if (!valid) {
-    const errorMessages = validate.errors.map((error) => {
-      const errorField = error.instancePath.replace("/", "") || "Umumiy";
-      return `${errorField}: ${error.message || error.params.message}`;
-    });
-    return response.error(res, errorMessages.join("; "));
+    const errorMessages = validate.errors[0].message;
+    return response.error(res, errorMessages);
   }
 
   next();

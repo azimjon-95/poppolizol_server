@@ -42,6 +42,7 @@ class ProductionSystem {
         defectiveDescription = "",
         date = new Date(),
       } = req.body;
+
       // Mahsulot normasi topilmadi yoki xarajatlari aniqlanmagan
       const quantity = Number(quantityToProduce);
 
@@ -250,7 +251,7 @@ class ProductionSystem {
         quantityProduced: quantity,
         materialsUsed,
         materialStatistics,
-        totalCost: totalCostSum,
+        totalCost: totalCostSum - totalMaterialCost,
         marketType,
         gasAmount: gasConsumption,
         electricity: electricityConsumption,

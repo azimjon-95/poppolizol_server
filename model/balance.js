@@ -65,10 +65,10 @@ balanceSchema.statics.updateBalance = async function (paymentMethod, type, amoun
 balanceSchema.statics.getBalance = async function (session = null) {
     const options = session ? { session } : {};
     const balance = await this.findOne({}, {}, options);
-    if (!balance) {
-        throw new Error('Balans hujjati topilmadi');
-    }
-    return balance;
+    // if (!balance) {
+    //     throw new Error('Balans hujjati topilmadi');
+    // }
+    return balance || { naqt: 0, bank: 0 };
 };
 
 const Balance = mongoose.model('Balance', balanceSchema);
