@@ -1,7 +1,6 @@
 const SalaryRecord = require("../../model/salaryRecord");
 const response = require("../../utils/response");
 const Incoming = require("../../model/Income");
-const Admins = require("../../model/adminModel");
 
 class SalaryRecordController {
   async getAll(req, res) {
@@ -31,7 +30,7 @@ class SalaryRecordController {
         .sort({ date: -1 });
 
       if (salaryRecords.length === 0) {
-        return response.error(res, "No salary records found");
+        return response.notFound(res, "No salary records found");
       }
 
       return response.success(
