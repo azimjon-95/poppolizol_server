@@ -5,6 +5,7 @@ const adminController = require("../controller/adminController");
 const attendanceController = require("../controller/attendanceController");
 const materialController = require("../controller/materialContoller");
 const materialService = require("../controller/materialCtrl");
+const PraymerController = require('../controller/praymer.controller');
 const normaController = require("../controller/normaController");
 const productionSystem = require("../controller/ProductionSystemCtrl");
 const factoryController = require("../controller/factoryConfigCtrl");
@@ -231,5 +232,19 @@ router.delete("/addition/expen/:id", AdditionExpenController.delete);
  * ============================
  */
 router.post("/process-payment", FirmService.processCompanyPayment);
+
+
+
+/**
+ * ============================
+ * Firm Praymer
+ * ============================
+ */
+router.post('/praymer/', PraymerController.createProduction);
+router.get('/praymer/', PraymerController.getAllProductions);
+router.get('/praymer/:id', PraymerController.getProductionById);
+router.put('/praymer/:id', PraymerController.updateProduction);
+router.delete('/praymer/:id', PraymerController.deleteProduction);
+router.get('/praymer/monthly/:startDate/:endDate', PraymerController.getOneMonthData); // Example: /monthly?month=8&year=2025
 
 module.exports = router;

@@ -2,9 +2,20 @@ const mongoose = require("mongoose");
 const Attendance = require("../model/attendanceModal");
 const Admins = require("../model/adminModel");
 const response = require("../utils/response");
+
 const {
   recalculatePolizolSalaries,
 } = require("../controller/calculateSalary/calculatePolizol");
+
+const {
+  reCalculateOkisleniya,
+} = require("../controller/calculateSalary/calculateOchisleniya");
+
+const {
+  reCalculateRuberoidSalaries,
+} = require("../controller/calculateSalary/calculateRubiroid");
+
+const updateSalaryRecordForDate = require("../controller/calculateSalary/reCalculate");
 
 const SalaryRecord = require("../model/salaryRecord");
 
@@ -104,6 +115,8 @@ class AttendanceController {
         );
         if (!cleaning) {
           await recalculatePolizolSalaries(date, session);
+          await reCalculateOkisleniya(date, session);
+          await reCalculateRuberoidSalaries(date, session);
         }
       } else {
         attendanceRecord = await Attendance.findOneAndUpdate(
@@ -118,6 +131,8 @@ class AttendanceController {
         );
         if (!cleaning) {
           await recalculatePolizolSalaries(date, session);
+          await reCalculateOkisleniya(date, session);
+          await reCalculateRuberoidSalaries(date, session);
         }
       }
 
@@ -179,10 +194,11 @@ class AttendanceController {
           salaryRecord.totalSum = totalSum;
           salaryRecord.salaryPerPercent = salaryPerPercent;
 
-
           await salaryRecord.save({ session });
         }
       }
+
+      await updateSalaryRecordForDate(unit, date, session);
 
       await session.commitTransaction();
       session.endSession();

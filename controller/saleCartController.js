@@ -12,7 +12,6 @@ const SalaryRecord = require("../model/salaryRecord");
 const Attendance = require("../model/attendanceModal");
 
 class SaleController {
-
   async createSale(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -38,7 +37,10 @@ class SaleController {
 
       if (payment.totalAmount < payment.paidAmount) {
         await session.abortTransaction();
-        return response.error(res, "To'lov summasi yakuniy summadan oshib ketdi!");
+        return response.error(
+          res,
+          "To'lov summasi yakuniy summadan oshib ketdi!"
+        );
       }
 
       if (payment.paidAmount > 0 && !payment.paymentType) {
@@ -64,13 +66,18 @@ class SaleController {
           name: customerData.name,
           phone: customerData.phone || "",
           type: customerData.type || "individual",
-          companyAddress: customerData.type === "company" ? customerData.companyAddress : undefined,
+          companyAddress:
+            customerData.type === "company"
+              ? customerData.companyAddress
+              : undefined,
         });
         await customer.save({ session });
       }
 
       const currentDate = new Date();
-      const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+      const month = `${currentDate.getFullYear()}.${String(
+        currentDate.getMonth() + 1
+      ).padStart(2, "0")}`;
 
       const plan = await Plan.findOne({
         employeeId: salerId,
@@ -79,14 +86,22 @@ class SaleController {
 
       if (!plan) {
         await session.abortTransaction();
-        return response.notFound(res, `Sotuvchi uchun ${month} oyida plan topilmadi`);
+        return response.notFound(
+          res,
+          `Sotuvchi uchun ${month} oyida plan topilmadi`
+        );
       }
 
       for (const item of items) {
-        const product = await FinishedProduct.findById(item._id).session(session);
+        const product = await FinishedProduct.findById(item._id).session(
+          session
+        );
         if (!product) {
           await session.abortTransaction();
-          return response.notFound(res, `Maxsulot topilmadi: ${item.productName}`);
+          return response.notFound(
+            res,
+            `Maxsulot topilmadi: ${item.productName}`
+          );
         }
         item.productId = item._id;
       }
@@ -105,10 +120,15 @@ class SaleController {
 
       if (payment.paidAmount > 0) {
         const balanceField = payment.paymentType === "naqt" ? "naqt" : "bank";
-        await Balance.updateBalance(balanceField, "kirim", payment.paidAmount, { session });
+        await Balance.updateBalance(balanceField, "kirim", payment.paidAmount, {
+          session,
+        });
 
         plan.achievedAmount += payment.paidAmount;
-        plan.progress = Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100);
+        plan.progress = Math.min(
+          (plan.achievedAmount / plan.targetAmount) * 100,
+          100
+        );
         await plan.save({ session });
       }
 
@@ -124,10 +144,18 @@ class SaleController {
         .populate("salerId", "firstName lastName")
         .lean();
 
-      return response.created(res, "Shartnoma muvaffaqiyatli tuzildi!", populatedSale);
+      return response.created(
+        res,
+        "Shartnoma muvaffaqiyatli tuzildi!",
+        populatedSale
+      );
     } catch (error) {
       await session.abortTransaction();
-      return response.serverError(res, "Sotuvni saqlashda xatolik!", error.message);
+      return response.serverError(
+        res,
+        "Sotuvni saqlashda xatolik!",
+        error.message
+      );
     } finally {
       session.endSession();
     }
@@ -138,7 +166,8 @@ class SaleController {
     session.startTransaction();
 
     try {
-      const { saleId, items, transport, transportCost } = req.body;
+      const { saleId, items, transport, transportCost, deliveredGroup } =
+        req.body;
 
       if (!saleId || !items || !transport || transportCost === undefined) {
         await session.abortTransaction();
@@ -151,7 +180,9 @@ class SaleController {
         return response.notFound(res, "Sotuv topilmadi");
       }
 
-      let transportRecord = await Transport.findOne({ transport }).session(session);
+      let transportRecord = await Transport.findOne({ transport }).session(
+        session
+      );
       if (!transportRecord) {
         transportRecord = new Transport({
           transport,
@@ -165,7 +196,9 @@ class SaleController {
       for (const item of items) {
         const { productId, quantity } = item;
 
-        const product = await FinishedProduct.findById(productId).session(session);
+        const product = await FinishedProduct.findById(productId).session(
+          session
+        );
         if (!product) {
           await session.abortTransaction();
           return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
@@ -173,24 +206,36 @@ class SaleController {
 
         if (product.quantity < quantity) {
           await session.abortTransaction();
-          return response.error(res, `Mahsulot yetarli emas: ${product.productName}`);
+          return response.error(
+            res,
+            `Mahsulot yetarli emas: ${product.productName}`
+          );
         }
 
         product.quantity -= quantity;
         await product.save({ session, validateModifiedOnly: true });
 
         const saleItem = sale.items.find(
-          (i) => i.productId && productId && i.productId.toString() === productId.toString()
+          (i) =>
+            i.productId &&
+            productId &&
+            i.productId.toString() === productId.toString()
         );
 
         if (!saleItem) {
           await session.abortTransaction();
-          return response.error(res, `Sotuvda mahsulot topilmadi: ${productId}`);
+          return response.error(
+            res,
+            `Sotuvda mahsulot topilmadi: ${productId}`
+          );
         }
 
         if (saleItem.deliveredQuantity + quantity > saleItem.quantity) {
           await session.abortTransaction();
-          return response.error(res, `Yuborilgan mahsulot ${saleItem.productName} uchun buyurtma miqdoridan oshib ketdi`);
+          return response.error(
+            res,
+            `Yuborilgan mahsulot ${saleItem.productName} uchun buyurtma miqdoridan oshib ketdi`
+          );
         }
 
         saleItem.deliveredQuantity += quantity;
@@ -204,6 +249,7 @@ class SaleController {
           transport,
           transportCost,
           deliveryDate: new Date(),
+          deliveredGroup,
         });
       }
 
@@ -217,11 +263,78 @@ class SaleController {
           $gte: new Date(today),
           $lte: new Date(today.getTime() + 86399999),
         },
-        department: "polizol",
+        department: deliveredGroup,
       }).session(session);
 
       const loadedCount = items.reduce((acc, i) => acc + i.quantity, 0);
       const loadAmount = loadedCount * 400;
+
+      // if (!salaryRecord) {
+      //   const emptyAttendances = await Attendance.find({
+      //     date: {
+      //       $gte: new Date(today),
+      //       $lte: new Date(today.getTime() + 86399999),
+      //     },
+      //     unit: deliveredGroup,
+      //   }).session(session);
+
+      //   if (emptyAttendances.length === 0) {
+      //     await session.abortTransaction();
+      //     return response.error(
+      //       res,
+      //       "Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi"
+      //     );
+      //   }
+
+      //   const totalPercentage = emptyAttendances.reduce(
+      //     (sum, a) => sum + a.percentage,
+      //     0
+      //   );
+      //   const salaryPerPercent = loadAmount / totalPercentage;
+
+      //   const workers = emptyAttendances.map((a) => ({
+      //     employee: a.employee,
+      //     percentage: a.percentage,
+      //     amount: Math.round(salaryPerPercent * a.percentage),
+      //   }));
+
+      //   salaryRecord = new SalaryRecord({
+      //     date: new Date(),
+      //     department: deliveredGroup,
+      //     producedCount: 0,
+      //     loadedCount,
+      //     totalSum: loadAmount,
+      //     salaryPerPercent,
+      //     workers,
+      //   });
+      // } else {
+      //   const todayAttendances = await Attendance.find({
+      //     date: {
+      //       $gte: new Date(today),
+      //       $lte: new Date(today.getTime() + 86399999),
+      //     },
+      //     unit: deliveredGroup,
+      //   }).session(session);
+
+      //   const totalPercentage = todayAttendances.reduce(
+      //     (sum, a) => sum + a.percentage,
+      //     0
+      //   );
+      //   const newLoadedCount = salaryRecord.loadedCount + loadedCount;
+      //   const newTotalSum = salaryRecord.totalSum + loadAmount;
+      //   const newSalaryPerPercent = newTotalSum / totalPercentage;
+
+      //   const updatedWorkers = todayAttendances.map((a) => ({
+      //     employee: a.employee,
+      //     percentage: a.percentage,
+      //     amount: Math.round(newSalaryPerPercent * a.percentage),
+      //   }));
+
+      //   salaryRecord.loadedCount = newLoadedCount;
+      //   salaryRecord.totalSum = newTotalSum;
+      //   salaryRecord.salaryPerPercent = newSalaryPerPercent;
+      //   salaryRecord.workers = updatedWorkers;
+      // }
 
       if (!salaryRecord) {
         const emptyAttendances = await Attendance.find({
@@ -229,59 +342,42 @@ class SaleController {
             $gte: new Date(today),
             $lte: new Date(today.getTime() + 86399999),
           },
-          unit: "polizol",
+          unit: deliveredGroup,
         }).session(session);
 
         if (emptyAttendances.length === 0) {
-          await session.abortTransaction();
-          return response.error(res, "Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi");
+          // Davomat yo‘q – faqat SalaryRecord yaratmaymiz
+          salaryRecord = null;
+        } else {
+          const totalPercentage = emptyAttendances.reduce(
+            (sum, a) => sum + a.percentage,
+            0
+          );
+          const salaryPerPercent = loadAmount / totalPercentage;
+
+          const workers = emptyAttendances.map((a) => ({
+            employee: a.employee,
+            percentage: a.percentage,
+            amount: Math.round(salaryPerPercent * a.percentage),
+          }));
+
+          salaryRecord = new SalaryRecord({
+            date: new Date(),
+            department: deliveredGroup,
+            producedCount: 0,
+            loadedCount,
+            totalSum: loadAmount,
+            salaryPerPercent,
+            workers,
+          });
         }
-
-        const totalPercentage = emptyAttendances.reduce((sum, a) => sum + a.percentage, 0);
-        const salaryPerPercent = loadAmount / totalPercentage;
-
-        const workers = emptyAttendances.map((a) => ({
-          employee: a.employee,
-          percentage: a.percentage,
-          amount: Math.round(salaryPerPercent * a.percentage),
-        }));
-
-        salaryRecord = new SalaryRecord({
-          date: new Date(),
-          department: "polizol",
-          producedCount: 0,
-          loadedCount,
-          totalSum: loadAmount,
-          salaryPerPercent,
-          workers,
-        });
-      } else {
-        const todayAttendances = await Attendance.find({
-          date: {
-            $gte: new Date(today),
-            $lte: new Date(today.getTime() + 86399999),
-          },
-          unit: "polizol",
-        }).session(session);
-
-        const totalPercentage = todayAttendances.reduce((sum, a) => sum + a.percentage, 0);
-        const newLoadedCount = salaryRecord.loadedCount + loadedCount;
-        const newTotalSum = salaryRecord.totalSum + loadAmount;
-        const newSalaryPerPercent = newTotalSum / totalPercentage;
-
-        const updatedWorkers = todayAttendances.map((a) => ({
-          employee: a.employee,
-          percentage: a.percentage,
-          amount: Math.round(newSalaryPerPercent * a.percentage),
-        }));
-
-        salaryRecord.loadedCount = newLoadedCount;
-        salaryRecord.totalSum = newTotalSum;
-        salaryRecord.salaryPerPercent = newSalaryPerPercent;
-        salaryRecord.workers = updatedWorkers;
       }
 
-      await salaryRecord.save({ session });
+      if (salaryRecord) {
+        await salaryRecord.save({ session });
+      }
+
+      // await salaryRecord.save({ session });
 
       await session.commitTransaction();
       return response.success(res, "Mahsulotlar yetkazib berildi!");

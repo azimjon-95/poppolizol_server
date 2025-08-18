@@ -9,8 +9,8 @@ const Inventory = require("../model/inventoryHistoryModel");
 const response = require("../utils/response");
 const mongoose = require("mongoose");
 const {
-  calculateOchisleniya,
-  reCalculateBtm5Sale,
+  calculateOchisleniyaBN3,
+  CalculateBN5forSale,
 } = require("./calculateSalary/calculateOchisleniya");
 
 const {
@@ -22,7 +22,6 @@ const {
 } = require("./calculateSalary/calculateRubiroid");
 
 class ProductionSystem {
-
   async productionProcess(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -58,53 +57,57 @@ class ProductionSystem {
 
       // 1. Bugungi kun chiqimlarini olish
       let expenses = await Expense.find({
-        type: 'chiqim',
+        type: "chiqim",
         category: {
           $in: [
-            'Oziq ovqat xarajatlari',
-            'Transport xarajatlari',
-            'Ofis xarajatlari',
-            'Uskuna ta’miri',
-            'Internet va aloqa',
-            'exnik xizmat',
-            'Eksport xarajatlari',
-            'Yer solig‘i',
-            'IT xizmatlar (dasturiy ta’minot)',
+            "Oziq ovqat xarajatlari",
+            "Transport xarajatlari",
+            "Ofis xarajatlari",
+            "Uskuna ta’miri",
+            "Internet va aloqa",
+            "exnik xizmat",
+            "Eksport xarajatlari",
+            "Yer solig‘i",
+            "IT xizmatlar (dasturiy ta’minot)",
             "Qarz to'lovi",
-            'Avans',
-            'Kadrlar o‘qitish / trening',
-            'Komandirovka xarajatlari',
-            'Suv / kanalizatsiya tizimi xizmatlari',
-            'Chiqindilar utilizatsiyasi',
-            'Litsenziya va ruxsatnomalar',
-            'Texnik xizmat',
-            'Reklama xarajatlari',
-            'Transport',
-            'Ishlab chiqarish vositalari xaridi',
-            'Ofis mebellari va texnikasi',
-            'Moliyaviy xizmatlar (bank, auditor)',
-            'Bank xizmatlari',
-            'Sud va yuridik xarajatlar',
-            'USTA va Qurilish ishlari',
-            'Ish/chik.xarajatlari',
-            'Boshqa xarajatlar (Prochi)',
-            'Buxgalteriya xizmati',
-            'Soliqlar va majburiy to‘lov',
-            'Avto Qora xarajati',
-            'Oylik maosh'
-          ]
+            "Avans",
+            "Kadrlar o‘qitish / trening",
+            "Komandirovka xarajatlari",
+            "Suv / kanalizatsiya tizimi xizmatlari",
+            "Chiqindilar utilizatsiyasi",
+            "Litsenziya va ruxsatnomalar",
+            "Texnik xizmat",
+            "Reklama xarajatlari",
+            "Transport",
+            "Ishlab chiqarish vositalari xaridi",
+            "Ofis mebellari va texnikasi",
+            "Moliyaviy xizmatlar (bank, auditor)",
+            "Bank xizmatlari",
+            "Sud va yuridik xarajatlar",
+            "USTA va Qurilish ishlari",
+            "Ish/chik.xarajatlari",
+            "Boshqa xarajatlar (Prochi)",
+            "Buxgalteriya xizmati",
+            "Soliqlar va majburiy to‘lov",
+            "Avto Qora xarajati",
+            "Oylik maosh",
+          ],
         },
-        createdAt: { $gte: today, $lt: tomorrow }
+        createdAt: { $gte: today, $lt: tomorrow },
       }).session(session);
 
       // 2. Filtrlash — Avans va Oylik maosh larida ishlab chiqarish xodimlarini chiqarib tashlash
       const filteredExpenses = [];
 
       for (const exp of expenses) {
-        if (['Avans', 'Oylik maosh', 'Ish haqi xarajatlari'].includes(exp.category)) {
+        if (
+          ["Avans", "Oylik maosh", "Ish haqi xarajatlari"].includes(
+            exp.category
+          )
+        ) {
           if (exp.relatedId) {
             const employee = await Admins.findById(exp.relatedId).lean();
-            if (!employee || employee.role !== 'ishlab chiqarish') {
+            if (!employee || employee.role !== "ishlab chiqarish") {
               filteredExpenses.push(exp);
             }
           } else {
@@ -115,60 +118,94 @@ class ProductionSystem {
         }
       }
 
-      const totalAmount = filteredExpenses.reduce((sum, item) => sum + item.amount, 0);
-
+      const totalAmount = filteredExpenses.reduce(
+        (sum, item) => sum + item.amount,
+        0
+      );
 
       const [additionExpen] = await AdditionExpen.find().session(session);
       if (!additionExpen) {
-        return response.notFound(res, "Tannarx va boshqa xarajatlari topilmadi!");
+        return response.notFound(
+          res,
+          "Tannarx va boshqa xarajatlari topilmadi!"
+        );
       }
 
       const additional = totalAmount || 0;
-      const additionalAmount = (additional * additionExpen.additionalExpenses) / 100;
+      const additionalAmount =
+        (additional * additionExpen.additionalExpenses) / 100;
 
       // Fetch factory and product pricing
       const [factory] = await Factory.find().session(session);
-      const productionPrice = await Product.findOne({ name: productName }).session(session);
+      const productionPrice = await Product.findOne({
+        name: productName,
+      }).session(session);
       if (!factory || !productionPrice) {
-        return response.notFound(res, "Zavod ma'lumotlari yoki narxlar topilmadi!");
+        return response.notFound(
+          res,
+          "Zavod ma'lumotlari yoki narxlar topilmadi!"
+        );
       }
 
       // Validate input arrays
-      if (!Array.isArray(consumedMaterials) || !Array.isArray(materialStatistics)) {
+      if (
+        !Array.isArray(consumedMaterials) ||
+        !Array.isArray(materialStatistics)
+      ) {
         return response.error(res, "Material ma'lumotlari noto‘g‘ri");
       }
 
       if (isDefective && !defectiveReason) {
-        return response.error(res, "Brak mahsulot uchun sabab kiritilishi shart");
+        return response.error(
+          res,
+          "Brak mahsulot uchun sabab kiritilishi shart"
+        );
       }
 
       if (materialStatistics.length !== consumedMaterials.length) {
-        return response.error(res, "Material statistikasi va ishlatilgan materiallar mos emas");
+        return response.error(
+          res,
+          "Material statistikasi va ishlatilgan materiallar mos emas"
+        );
       }
 
       // Validate material statistics status
       for (const stat of materialStatistics) {
         if (!["exceed", "insufficient", "equal"].includes(stat.status)) {
-          return response.error(res, `Noto‘g‘ri status: ${stat.status} uchun ${stat.materialName}`);
+          return response.error(
+            res,
+            `Noto‘g‘ri status: ${stat.status} uchun ${stat.materialName}`
+          );
         }
       }
 
-      const productNorma = await ProductNorma.findById(productNormaId).lean().session(session);
+      const productNorma = await ProductNorma.findById(productNormaId)
+        .lean()
+        .session(session);
       if (!productNorma) {
-        return response.notFound(res, "Mahsulot normasi topilmadi yoki xarajatlari aniqlanmagan");
+        return response.notFound(
+          res,
+          "Mahsulot normasi topilmadi yoki xarajatlari aniqlanmagan"
+        );
       }
 
       // Calculate resource costs
       const electricityCostPerKWH = Number(factory.electricityPrice);
       const gasCostPerKWH = Number(factory.methaneGasPrice);
-      const totalElectricityUsed = parseFloat((electricityConsumption || 0).toFixed(2));
+      const totalElectricityUsed = parseFloat(
+        (electricityConsumption || 0).toFixed(2)
+      );
       const totalGasUsed = parseFloat((gasConsumption || 0).toFixed(2));
       const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
       const totalGasCost = totalGasUsed * gasCostPerKWH;
 
       // Calculate labor and loading costs
-      const workerPayPerUnit = parseFloat(Number(productionPrice.productionCost).toFixed(2));
-      const loadingPayPerUnit = parseFloat(Number(productionPrice.loadingCost).toFixed(2));
+      const workerPayPerUnit = parseFloat(
+        Number(productionPrice.productionCost).toFixed(2)
+      );
+      const loadingPayPerUnit = parseFloat(
+        Number(productionPrice.loadingCost).toFixed(2)
+      );
       const totalWorkerCost = workerPayPerUnit * quantity;
       const totalLoadingCost = loadingPayPerUnit * quantity;
 
@@ -177,21 +214,33 @@ class ProductionSystem {
       let totalMaterialCost = 0;
 
       for (const consumed of consumedMaterials) {
-        const material = await Material.findById(consumed.materialId).session(session);
+        const material = await Material.findById(consumed.materialId).session(
+          session
+        );
         if (!material) {
-          return response.notFound(res, `Material topilmadi: ID ${consumed.materialId}`);
+          return response.notFound(
+            res,
+            `Material topilmadi: ID ${consumed.materialId}`
+          );
         }
 
-        const consumedQuantity = parseFloat(Number(consumed.quantity || 0).toFixed(2));
+        const consumedQuantity = parseFloat(
+          Number(consumed.quantity || 0).toFixed(2)
+        );
         const unitPrice = parseFloat(Number(material.price).toFixed(2));
         const cost = consumedQuantity * unitPrice;
         totalMaterialCost += cost;
 
         if (Number(material.quantity) < consumedQuantity) {
-          return response.error(res, `Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`);
+          return response.error(
+            res,
+            `Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`
+          );
         }
 
-        material.quantity = parseFloat((Number(material.quantity) - consumedQuantity).toFixed(2));
+        material.quantity = parseFloat(
+          (Number(material.quantity) - consumedQuantity).toFixed(2)
+        );
         await material.save({ session });
 
         materialsUsed.push({
@@ -203,14 +252,17 @@ class ProductionSystem {
       }
 
       // Calculate total production cost
-      const totalCostSum = parseFloat((
-        totalMaterialCost +
-        totalGasCost +
-        totalElectricityCost +
-        totalWorkerCost +
-        totalLoadingCost +
-        additionalAmount
-      ).toFixed(2));
+
+      const totalCostSum = parseFloat(
+        (
+          totalMaterialCost +
+          totalGasCost +
+          totalElectricityCost +
+          totalWorkerCost +
+          totalLoadingCost +
+          additionalAmount
+        ).toFixed(2)
+      );
 
       const productionCost = totalCostSum / quantity;
 
@@ -223,42 +275,59 @@ class ProductionSystem {
 
       const defectiveInfo = isDefective
         ? { defectiveReason, defectiveDescription, defectiveDate: new Date() }
-        : { defectiveReason: "", defectiveDescription: "", defectiveDate: null };
+        : {
+          defectiveReason: "",
+          defectiveDescription: "",
+          defectiveDate: null,
+        };
 
       if (finishedProduct) {
         // Update existing product
         finishedProduct.quantity += quantity;
-        finishedProduct.productionCost = Math.max(finishedProduct.productionCost, productionCost);
+        finishedProduct.productionCost = Math.max(
+          finishedProduct.productionCost,
+          productionCost
+        );
         await finishedProduct.save({ session });
       } else {
         // Create new product
-        finishedProduct = await FinishedProduct.create([{
-          productName: productNorma.productName,
-          category: productNorma.category,
-          marketType,
-          quantity,
-          productionCost,
-          sellingPrice: Number(productNorma.salePrice || 0),
-          isDefective,
-          defectiveInfo,
-        }], { session })[0];
+        finishedProduct = await FinishedProduct.create(
+          [
+            {
+              productName: productNorma.productName,
+              category: productNorma.category,
+              marketType,
+              quantity,
+              productionCost,
+              sellingPrice: Number(productNorma.salePrice || 0),
+              isDefective,
+              defectiveInfo,
+            },
+          ],
+          { session }
+        )[0];
       }
 
       // Record production history
-      await ProductionHistory.create([{
-        productNormaId: productNorma._id,
-        productName: productNorma.productName,
-        quantityProduced: quantity,
-        materialsUsed,
-        materialStatistics,
-        totalCost: totalCostSum - totalMaterialCost,
-        marketType,
-        gasAmount: gasConsumption,
-        electricity: electricityConsumption,
-        isDefective,
-        salePrice: Number(productNorma.salePrice),
-        defectiveInfo: isDefective ? defectiveInfo : undefined,
-      }], { session });
+      await ProductionHistory.create(
+        [
+          {
+            productNormaId: productNorma._id,
+            productName: productNorma.productName,
+            quantityProduced: quantity,
+            materialsUsed,
+            materialStatistics,
+            totalCost: totalCostSum - totalMaterialCost,
+            marketType,
+            gasAmount: gasConsumption,
+            electricity: electricityConsumption,
+            isDefective,
+            salePrice: Number(productNorma.salePrice),
+            defectiveInfo: isDefective ? defectiveInfo : undefined,
+          },
+        ],
+        { session }
+      );
 
       // Handle special salary calculations
       const lowerProductName = productName.toLowerCase();
@@ -271,7 +340,10 @@ class ProductionSystem {
         });
       }
 
-      if (lowerProductName.includes("polizol") || lowerProductName.includes("folygoizol")) {
+      if (
+        lowerProductName.includes("polizol") ||
+        lowerProductName.includes("folygoizol")
+      ) {
         await calculatePolizolSalaries({
           producedCount: quantityToProduce,
           loadedCount: 0,
@@ -281,20 +353,28 @@ class ProductionSystem {
       }
 
       await session.commitTransaction();
-      return response.created(res, `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${isDefective ? " (Brak sifatida)" : ""}`, {
-        totalCost: totalCostSum,
-        materialStatistics,
-        isDefective,
-        defectiveInfo: isDefective ? defectiveInfo : undefined,
-        totalElectricityUsed,
-        totalGasUsed,
-        totalElectricityCost,
-        totalGasCost,
-      });
-
+      return response.created(
+        res,
+        `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${isDefective ? " (Brak sifatida)" : ""
+        }`,
+        {
+          totalCost: totalCostSum,
+          materialStatistics,
+          isDefective,
+          defectiveInfo: isDefective ? defectiveInfo : undefined,
+          totalElectricityUsed,
+          totalGasUsed,
+          totalElectricityCost,
+          totalGasCost,
+        }
+      );
     } catch (error) {
       await session.abortTransaction();
-      return response.serverError(res, "❌ Ishlab chiqarish xatolikka uchradi", error.message);
+      return response.serverError(
+        res,
+        "❌ Ishlab chiqarish xatolikka uchradi",
+        error.message
+      );
     } finally {
       session.endSession();
     }
@@ -333,7 +413,10 @@ class ProductionSystem {
 
       // Validate date formats
       if (isNaN(start) || isNaN(end)) {
-        return response.badRequest(res, "Invalid date format for startDate or endDate");
+        return response.badRequest(
+          res,
+          "Invalid date format for startDate or endDate"
+        );
       }
 
       // Ensure endDate is not before startDate
@@ -483,7 +566,7 @@ class ProductionSystem {
       // Inventory'ga saqlash
       const [inventory] = await Inventory.create([inventoryData], { session });
 
-      await calculateOchisleniya(bn3Amount, finalBn5, date, session);
+      await calculateOchisleniyaBN3(bn3Amount, finalBn5, date, session);
 
       await session.commitTransaction();
       isCommitted = true;
@@ -586,7 +669,6 @@ class ProductionSystem {
         return response.error(res, "Materiallar miqdori yetarli emas");
       }
 
-
       // Material miqdorlarini kamaytirish
       bn5Material.quantity -= bn5Amount;
       melMaterial.quantity -= melAmount;
@@ -680,7 +762,7 @@ class ProductionSystem {
       const [inventory] = await Inventory.create([inventoryData], { session });
 
       let btm5Sale = bn5Amount + melAmount;
-      await reCalculateBtm5Sale(btm5Sale, date, session);
+      await CalculateBN5forSale(btm5Sale, date, session);
 
       // Yakunlash
       await session.commitTransaction();
@@ -732,7 +814,10 @@ class ProductionSystem {
 
       // Validate date formats
       if (isNaN(start) || isNaN(end)) {
-        return response.badRequest(res, "Invalid date format for startDate or endDate");
+        return response.badRequest(
+          res,
+          "Invalid date format for startDate or endDate"
+        );
       }
 
       // Ensure endDate is not before startDate

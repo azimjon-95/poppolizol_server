@@ -1,7 +1,12 @@
 const Attendance = require("../../model/attendanceModal");
 const SalaryRecord = require("../../model/salaryRecord");
 
-const calculateOchisleniya = async (btm3, btm5, inputDate, session = null) => {
+const calculateOchisleniyaBN3 = async (
+  btm3,
+  btm5,
+  inputDate,
+  session = null
+) => {
   const targetDate = new Date(inputDate);
   targetDate.setHours(0, 0, 0, 0);
   const endOfDay = new Date(targetDate.getTime() + 86399999);
@@ -70,10 +75,8 @@ const calculateOchisleniya = async (btm3, btm5, inputDate, session = null) => {
   }
 };
 
-const reCalculateBtm5Sale = async (btm5_sale, inputDate, session = null) => {
+const CalculateBN5forSale = async (btm5_sale, inputDate, session = null) => {
   try {
-    console.log("start");
-
     const targetDate = new Date(inputDate);
     targetDate.setHours(0, 0, 0, 0);
     const endOfDay = new Date(targetDate.getTime() + 86399999);
@@ -138,4 +141,64 @@ const reCalculateBtm5Sale = async (btm5_sale, inputDate, session = null) => {
   }
 };
 
-module.exports = { calculateOchisleniya, reCalculateBtm5Sale };
+// =========================================================
+// BN3 ni qayta hisoblash
+const reCalculateOkisleniya = async (inputDate, session = null) => {
+  const targetDate = new Date(inputDate);
+  targetDate.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(targetDate.getTime() + 86399999);
+
+  // Mavjud SalaryRecord topish
+  const salaryRecord = await SalaryRecord.findOne({
+    date: { $gte: targetDate, $lte: endOfDay },
+    department: "Okisleniya",
+  }).session(session);
+
+  if (!salaryRecord) {
+    console.log("SalaryRecord topilmadi: Okisleniya");
+    return null;
+  }
+
+  // Davomatni qayta olish
+  const attendances = await Attendance.find({
+    date: { $gte: targetDate, $lte: endOfDay },
+    unit: "Okisleniya",
+  })
+    .populate("employee")
+    .session(session);
+
+  if (attendances.length === 0) {
+    console.log("Davomat topilmadi: Okisleniya");
+    return null;
+  }
+
+  // Eski btm qiymatlaridan foydalangan holda qayta hisoblash
+  const btm3Salary = (salaryRecord.btm_3 || 0) * 25;
+  const btm5Salary = (salaryRecord.btm_5 || 0) * 70;
+  const btm5SaleSalary = (salaryRecord.btm_5_sale || 0) * 150;
+
+  const totalSalary = btm3Salary + btm5Salary + btm5SaleSalary;
+
+  const totalPercentage = attendances.reduce((sum, a) => sum + a.percentage, 0);
+  const salaryPerPercent = totalSalary / totalPercentage;
+
+  const workers = attendances.map((a) => ({
+    employee: a.employee._id,
+    percentage: a.percentage,
+    amount: Math.round(salaryPerPercent * a.percentage),
+  }));
+
+  // Yangilash
+  salaryRecord.totalSum = totalSalary;
+  salaryRecord.salaryPerPercent = salaryPerPercent;
+  salaryRecord.workers = workers;
+  await salaryRecord.save({ session });
+
+  console.log("BN3 qayta hisoblandi.");
+};
+
+module.exports = {
+  calculateOchisleniyaBN3,
+  CalculateBN5forSale,
+  reCalculateOkisleniya,
+};
