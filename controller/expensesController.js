@@ -1,6 +1,7 @@
 const Expense = require('../model/expenseModel');
 const ProductionHistory = require('../model/ProductionHistoryModel');
 const Inventory = require('../model/inventoryHistoryModel');
+const Praymer = require('../model/praymer');
 const Balance = require('../model/balance');
 const response = require('../utils/response');
 const mongoose = require('mongoose');
@@ -17,10 +18,11 @@ class ExpenseController {
       const dateFilter = { $gte: new Date(startDate), $lte: new Date(endDate) };
 
       // Fetch data in parallel
-      const [expenses, productionHistory, inventory] = await Promise.all([
+      const [expenses, productionHistory, inventory, praymer] = await Promise.all([
         Expense.find({ date: dateFilter }),
         ProductionHistory.find({ createdAt: dateFilter }),
         Inventory.find({ createdAt: dateFilter }),
+        Praymer.find({ createdAt: dateFilter }),
       ]);
 
       // Process expenses
@@ -117,15 +119,38 @@ class ExpenseController {
 
       const consolidatedInventory = Object.values(inventoryItems).filter((i) => i.quantity > 0 || i.melQuantity > 0);
 
+      // =============================
+      // Process inventory
+      const praymerItems = {
+        praymer: { name: 'Praymer - BIPRO', quantity: 0, melQuantity: 0, gas: 0, electricity: 0, sellingPrice: 0 },
+      };
+
+      praymer.forEach((item) => {
+        const target = item.productionName === 'Praymer - BIPRO' ? praymerItems.praymer : null
+        if (target) {
+          target.quantity += item.productionQuantity || 0;
+          target.melQuantity += item.melAmount || 0;
+          target.gas += item.gasAmount || 0;
+          target.electricity += item.electricity || 0;
+          target.sellingPrice = item.salePricePerBucket || 0;
+        }
+      });
+
+      const praymerInventory = Object.values(praymerItems).filter((i) => i.quantity > 0 || i.melQuantity > 0);
+      // =============================
+
+
       // Calculate totals and percentages
       const calcTotal = (arr) => arr.reduce((sum, item) => sum + item.quantity * item.sellingPrice, 0);
       const totalProduction = calcTotal(consolidatedProductionHistory);
       const totalInventory = calcTotal(consolidatedInventory);
-      const grandTotal = totalProduction + totalInventory;
+      const totalPraymer = calcTotal(praymerInventory);
+      const grandTotal = totalProduction + totalInventory + totalPraymer;
       const profit = grandTotal - totalAmount;
       const totalWithProfit = totalAmount + profit;
       const profitPercentage = totalWithProfit > 0 ? (profit / totalWithProfit) * 100 : 0;
       const expensePercentage = 100 - profitPercentage;
+
 
       // Format output
       const formattedOutput = Object.entries(totalByCategory).map(([category, amount]) => ({
@@ -155,6 +180,7 @@ class ExpenseController {
         expenses: formattedOutput,
         productionHistory: consolidatedProductionHistory,
         inventory: consolidatedInventory,
+        praymer: praymerInventory
       });
     } catch (error) {
       return response.serverError(res, 'Server error', error.message);

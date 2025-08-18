@@ -91,7 +91,6 @@ class BonusController {
   async update(req, res) {
     try {
       const { id } = req.params;
-      console.log(id);
 
       const updated = await Bonus.findByIdAndUpdate(id, req.body, {
         new: true,

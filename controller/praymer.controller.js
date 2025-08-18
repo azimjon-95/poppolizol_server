@@ -149,7 +149,6 @@ class PraymerController {
     static async getOneMonthData(req, res) {
         try {
             const { startDate, endDate } = req.params; // Extract startDate and endDate from query params
-            console.log(startDate, endDate);
             // Validate startDate and endDate
             if (!startDate || !endDate) {
                 return Response.error(res, 'startDate va endDate kiritilishi shart');
