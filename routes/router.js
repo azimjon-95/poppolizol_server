@@ -12,7 +12,7 @@ const factoryController = require("../controller/factoryConfigCtrl");
 const ExpenseController = require("../controller/expensesController");
 const SalaryService = require("../controller/SalaryCtrl");
 const SalesController = require("../controller/planSalerController");
-const CategoryProductController = require('../controller/catigory.controller');
+const CategoryProductController = require("../controller/catigory.controller");
 const SaleController = require("../controller/saleCartController"); // Path to your SaleController
 const salaryController = require("../controller/calculateSalary/salaryController");
 const AdditionExpenController = require("../controller/additionExpen.controller");
@@ -23,6 +23,15 @@ const materialValidation = require("../validation/MaterialValidation");
 const normaValidation = require("../validation/normaValidation");
 const DebtController = require("../controller/debtController");
 const DashboardController = require("../controller/dashboardController");
+
+const bonusController = require("../controller/bonusController");
+const bonusValidation = require("../validation/bonusValidation");
+
+router.post("/bonus/create", bonusValidation, bonusController.create);
+router.get("/bonus/all", bonusController.getAll);
+router.get("/bonus/:id", bonusController.getById);
+router.put("/bonus/update/:id", bonusController.update);
+router.delete("/bonus/delete/:id", bonusController.delete);
 
 router.get("/salary/getAll", salaryController.getAll);
 router.get("/salary/getBTM3", salaryController.getSalariesBTM3);
@@ -144,7 +153,8 @@ router.get(
 );
 router.post("/overpayment", SalaryService.handleOverpayment);
 // getEmployeeFinanceHistory
-router.get("/finance-history/:employeeId",
+router.get(
+  "/finance-history/:employeeId",
   SalaryService.getEmployeeFinanceHistory
 );
 /**
@@ -207,12 +217,11 @@ router.get("/dashboard", DashboardController.getMonthlyDashboard);
  *  Category Routes
  * ============================
  */
-router.post('/category', CategoryProductController.create);
-router.get('/category', CategoryProductController.getAll);
-router.get('/category/:id', CategoryProductController.getById);
-router.put('/category/:id', CategoryProductController.update);
-router.delete('/category/:id', CategoryProductController.delete);
-
+router.post("/category", CategoryProductController.create);
+router.get("/category", CategoryProductController.getAll);
+router.get("/category/:id", CategoryProductController.getById);
+router.put("/category/:id", CategoryProductController.update);
+router.delete("/category/:id", CategoryProductController.delete);
 
 /**
  * ============================
@@ -224,7 +233,6 @@ router.get("/addition/expen", AdditionExpenController.getAll);
 router.get("/addition/expen/:id", AdditionExpenController.getById);
 router.put("/addition/expen/:id", AdditionExpenController.update);
 router.delete("/addition/expen/:id", AdditionExpenController.delete);
-
 
 /**
  * ============================
