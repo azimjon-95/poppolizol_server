@@ -34,7 +34,7 @@ app.set("socket", io);
 soket.connect(io);
 
 app.use("/api", authMiddleware, router); // Routerlarni ulash
-app.get("/", (req, res) => res.send("Salom dunyo")); // Bosh sahifa
+app.get("/", (req, res) => res.send("Polizol Server API")); // Bosh sahifa
 app.use(notfound); // 404 middleware
 
 server.listen(PORT, () => console.log(`http://localhost:${PORT}`));
