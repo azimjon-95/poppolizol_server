@@ -5,7 +5,7 @@ const adminController = require("../controller/adminController");
 const attendanceController = require("../controller/attendanceController");
 const materialController = require("../controller/materialContoller");
 const materialService = require("../controller/materialCtrl");
-const PraymerController = require('../controller/praymer.controller');
+const PraymerController = require("../controller/praymer.controller");
 const normaController = require("../controller/normaController");
 const productionSystem = require("../controller/ProductionSystemCtrl");
 const factoryController = require("../controller/factoryConfigCtrl");
@@ -17,6 +17,7 @@ const SaleController = require("../controller/saleCartController"); // Path to y
 const salaryController = require("../controller/calculateSalary/salaryController");
 const AdditionExpenController = require("../controller/additionExpen.controller");
 const FirmService = require("../controller/firmaCtrl");
+
 // Validations
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
@@ -241,18 +242,19 @@ router.delete("/addition/expen/:id", AdditionExpenController.delete);
  */
 router.post("/process-payment", FirmService.processCompanyPayment);
 
-
-
 /**
  * ============================
  * Firm Praymer
  * ============================
  */
-router.post('/praymer/', PraymerController.createProduction);
-router.get('/praymer/', PraymerController.getAllProductions);
-router.get('/praymer/:id', PraymerController.getProductionById);
-router.put('/praymer/:id', PraymerController.updateProduction);
-router.delete('/praymer/:id', PraymerController.deleteProduction);
-router.get('/praymer/monthly/:startDate/:endDate', PraymerController.getOneMonthData); // Example: /monthly?month=8&year=2025
+router.post("/praymer/", PraymerController.createProduction);
+router.get("/praymer/", PraymerController.getAllProductions);
+router.get("/praymer/:id", PraymerController.getProductionById);
+router.put("/praymer/:id", PraymerController.updateProduction);
+router.delete("/praymer/:id", PraymerController.deleteProduction);
+router.get(
+  "/praymer/monthly/:startDate/:endDate",
+  PraymerController.getOneMonthData
+); // Example: /monthly?month=8&year=2025
 
 module.exports = router;
