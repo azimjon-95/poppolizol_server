@@ -17,7 +17,6 @@ const SaleController = require("../controller/saleCartController"); // Path to y
 const salaryController = require("../controller/calculateSalary/salaryController");
 const AdditionExpenController = require("../controller/additionExpen.controller");
 const FirmService = require("../controller/firmaCtrl");
-
 // Validations
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
