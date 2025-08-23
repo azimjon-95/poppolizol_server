@@ -106,7 +106,7 @@ class AdminController {
       } else if (!isOfficeWorker) {
         updateData.password = "";
         updateData.login = "";
-        updateData.role = "";
+        // updateData.role = "";
       }
 
       // unitHeadPassword ni yangilash (agar unit mos bo'lsa va unitHeadPassword berilgan bo'lsa)
