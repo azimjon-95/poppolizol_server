@@ -29,6 +29,11 @@ const employeeValidation = (req, res, next) => {
         maxLength: 50,
         errorMessage: "Otasining ismi 50 ta belgi oralig‘ida bo‘lishi kerak",
       },
+      dateOfBirth: {
+        type: "string",
+        format: "date", // Ensures valid ISO date (e.g., "YYYY-MM-DD")
+        errorMessage: "Tug'ilgan sana to‘g‘ri formatda bo‘lishi kerak (masalan, YYYY-MM-DD)",
+      },
       lastName: {
         type: "string",
         minLength: 2,
@@ -72,11 +77,11 @@ const employeeValidation = (req, res, next) => {
       },
       login: {
         type: "string",
-        maxLength: 50, // Added to prevent excessively long inputs
+        maxLength: 50,
       },
       password: {
         type: "string",
-        maxLength: 50, // Added to prevent excessively long inputs
+        maxLength: 50,
       },
       plans: {
         type: "array",
@@ -103,6 +108,7 @@ const employeeValidation = (req, res, next) => {
           "tozalash",
           "oshxona",
           "sotuvchi",
+          "svarshik",
           "sotuvchi eksport",
           "sotuvchi menejir",
           "polizol",
@@ -117,7 +123,7 @@ const employeeValidation = (req, res, next) => {
       },
       unitHeadPassword: {
         type: "string",
-        maxLength: 50, // Added to prevent excessively long inputs
+        maxLength: 50,
       },
     },
     required: [
@@ -202,6 +208,27 @@ const employeeValidation = (req, res, next) => {
       },
       additionalProperties: "Ruxsat etilmagan maydon kiritildi",
     },
+  };
+
+  // Custom validation for dateOfBirth to ensure reasonable range
+  ajv.addKeyword({
+    keyword: "isValidDateOfBirth",
+    validate: function (schema, data) {
+      if (!data) return true; // Optional field
+      const dob = new Date(data);
+      const today = new Date();
+      const minDate = new Date();
+      minDate.setFullYear(today.getFullYear() - 100); // No one older than 100
+      const maxDate = new Date();
+      maxDate.setFullYear(today.getFullYear() - 18); // Must be at least 18
+      return dob >= minDate && dob <= maxDate;
+    },
+    errors: false,
+  });
+
+  schema.properties.dateOfBirth.isValidDateOfBirth = true;
+  schema.properties.dateOfBirth.errorMessage = {
+    isValidDateOfBirth: "Tug'ilgan sana 18 yoshdan katta va 100 yoshdan kichik bo‘lishi kerak",
   };
 
   const validate = ajv.compile(schema);

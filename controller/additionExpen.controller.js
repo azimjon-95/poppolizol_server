@@ -7,6 +7,7 @@ class AdditionExpenController {
     async create(req, res) {
         try {
             const newExpense = await AdditionExpen.create(req.body);
+            console.log(newExpense);
             return response.created(res, "Expense created successfully", newExpense);
         } catch (err) {
             return response.serverError(res, "Creation failed", err.message);
