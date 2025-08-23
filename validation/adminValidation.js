@@ -108,6 +108,7 @@ const employeeValidation = (req, res, next) => {
           "tozalash",
           "oshxona",
           "sotuvchi",
+          "muhandis",
           "svarshik",
           "sotuvchi eksport",
           "sotuvchi menejir",
