@@ -31,7 +31,7 @@ const employeeValidation = (req, res, next) => {
       },
       dateOfBirth: {
         type: "string",
-        format: "date", // Ensures valid ISO date (e.g., "YYYY-MM-DD")
+        format: "date-time", // Ensures valid ISO date (e.g., "YYYY-MM-DD")
         errorMessage: "Tug'ilgan sana to‘g‘ri formatda bo‘lishi kerak (masalan, YYYY-MM-DD)",
       },
       lastName: {
