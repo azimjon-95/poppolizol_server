@@ -133,7 +133,7 @@ class ProductionSystem {
 
       const additional = totalAmount || 0;
       const additionalAmount =
-        (additional * additionExpen.additionalExpenses) / 100;
+        (additional * additionExpen.additionalExpenses || 0) / 100;
 
       // Fetch factory and product pricing
       const [factory] = await Factory.find().session(session);
@@ -252,7 +252,7 @@ class ProductionSystem {
       }
 
       // Calculate total production cost
-
+     
       const totalCostSum = parseFloat(
         (
           totalMaterialCost +
@@ -276,10 +276,10 @@ class ProductionSystem {
       const defectiveInfo = isDefective
         ? { defectiveReason, defectiveDescription, defectiveDate: new Date() }
         : {
-          defectiveReason: "",
-          defectiveDescription: "",
-          defectiveDate: null,
-        };
+            defectiveReason: "",
+            defectiveDescription: "",
+            defectiveDate: null,
+          };
 
       if (finishedProduct) {
         // Update existing product
@@ -355,7 +355,8 @@ class ProductionSystem {
       await session.commitTransaction();
       return response.created(
         res,
-        `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${isDefective ? " (Brak sifatida)" : ""
+        `✅ ${productNorma.productName} dan ${quantity} dona ishlab chiqarildi${
+          isDefective ? " (Brak sifatida)" : ""
         }`,
         {
           totalCost: totalCostSum,
@@ -506,7 +507,8 @@ class ProductionSystem {
         session.endSession();
         return response.error(
           res,
-          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${bn3Material?.quantity || 0
+          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${
+            bn3Material?.quantity || 0
           }`
         );
       }
