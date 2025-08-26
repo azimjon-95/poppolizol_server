@@ -33,9 +33,7 @@ class NormaController {
 
       // Fetch factory data
       const factory = await Factory.findOne().select("electricityPrice methaneGasPrice");
-      if (!factory) {
-        return response.error(res, "Zavod ma'lumotlari topilmadi");
-      }
+
 
       // Fetch material data
       const materialData = await Material.find().select("price");
@@ -82,9 +80,7 @@ class NormaController {
 
       // Fetch factory data
       const factory = await Factory.findOne().select("electricityPrice methaneGasPrice").lean();
-      if (!factory) {
-        return response.error(res, "Zavod ma'lumotlari topilmadi");
-      }
+
 
       // Fetch material data for provided material IDs
       const materialIds = materials.map(item => item.materialId);

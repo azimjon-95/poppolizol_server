@@ -50,14 +50,6 @@ const workerExpensesSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
-  periodicExpenses: {
-    type: Number,
-    required: true,
-  },
-  additionalExpenses: {
-    type: Number,
-    required: true,
-  }
 }, {
   timestamps: true,
 });

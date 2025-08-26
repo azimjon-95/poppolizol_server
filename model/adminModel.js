@@ -12,6 +12,10 @@ const EmployeeSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    dateOfBirth: {
+      type: Date,
+      default: "",
+    },
     lastName: {
       type: String,
       required: [true, "Familya kiritilishi shart"],
@@ -85,6 +89,7 @@ const EmployeeSchema = new mongoose.Schema(
         "menejir",
         "ombor",
         "sifat nazorati",
+        "muhandis",
 
         "elektrik",
         "transport",
@@ -97,6 +102,7 @@ const EmployeeSchema = new mongoose.Schema(
         "sotuvchi eksport",
         "sotuvchi menejir",
 
+        "svarshik",
         "polizol",
         "polizol ish boshqaruvchi",
         "rubiroid",
