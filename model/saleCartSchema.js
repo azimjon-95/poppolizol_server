@@ -1,12 +1,19 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const customerSchema = new mongoose.Schema({
+const customerSchema = new mongoose.Schema(
+  {
     name: { type: String, required: true },
-    type: { type: String, enum: ['individual', 'company'], default: 'individual' },
+    type: {
+      type: String,
+      enum: ["individual", "company"],
+      default: "individual",
+    },
     phone: { type: String },
     companyAddress: { type: String },
     company: { type: String },
-}, { timestamps: true });
+  },
+  { timestamps: true }
+);
 
 const saleSchema = new mongoose.Schema(
   {
@@ -61,7 +68,7 @@ const saleSchema = new mongoose.Schema(
         transport: { type: String, required: true },
         transportCost: { type: Number, required: true, min: 0 },
         deliveryDate: { type: Date, default: Date.now },
-        deliveredGroup: { type: String, required: true },
+        deliveredGroups: { type: [String], required: true },
       },
     ],
     payment: {
@@ -94,15 +101,14 @@ const saleSchema = new mongoose.Schema(
   }
 );
 
-saleSchema.pre('save', function (next) {
-    if (this.payment.debt === 0) {
-        this.payment.isActive = false;
-    }
-    next();
+saleSchema.pre("save", function (next) {
+  if (this.payment.debt === 0) {
+    this.payment.isActive = false;
+  }
+  next();
 });
 
-const Salecart = mongoose.model('Salecart', saleSchema);
-const Customer = mongoose.model('Customer', customerSchema);
+const Salecart = mongoose.model("Salecart", saleSchema);
+const Customer = mongoose.model("Customer", customerSchema);
 
 module.exports = { Salecart, Customer };
-

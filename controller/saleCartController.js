@@ -11,6 +11,8 @@ const moment = require("moment");
 const SalaryRecord = require("../model/salaryRecord");
 const Attendance = require("../model/attendanceModal");
 
+const { Product: ProductPriceInfo } = require("../model/factoryModel");
+
 class SaleController {
   async createSale(req, res) {
     const session = await mongoose.startSession();
@@ -166,8 +168,10 @@ class SaleController {
     session.startTransaction();
 
     try {
-      const { saleId, items, transport, transportCost, deliveredGroup } =
+      const { saleId, items, transport, transportCost, deliveredGroups } =
         req.body;
+
+      let loadAmount = 0;
 
       if (!saleId || !items || !transport || transportCost === undefined) {
         await session.abortTransaction();
@@ -249,135 +253,88 @@ class SaleController {
           transport,
           transportCost,
           deliveryDate: new Date(),
-          deliveredGroup,
+          deliveredGroups,
         });
+
+        if (product) {
+          let priceInfo = await ProductPriceInfo.findOne({
+            category: { $regex: `^${product.category}$`, $options: "i" },
+          });
+
+          if (priceInfo) {
+            loadAmount += priceInfo.loadingCost * item.quantity;
+          }
+        }
       }
 
       await sale.save({ session });
+      // -------------------------------------------
+      // find  todays attendance
+      const now = new Date();
+      const hour = now.getHours();
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
 
-      let today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
 
-      let salaryRecord = await SalaryRecord.findOne({
-        date: {
-          $gte: new Date(today),
-          $lte: new Date(today.getTime() + 86399999),
-        },
-        department: deliveredGroup,
+      const baseAttendanceQuery = {
+        date: { $gte: startOfDay, $lte: endOfDay },
+        percentage: hour >= 12 ? { $gt: 0.5 } : { $gt: 0 }, // 12:00 dan keyin faqat 0.5+
+      };
+
+      let totalAttendances = await Attendance.find({
+        ...baseAttendanceQuery,
+        unit: { $in: deliveredGroups },
       }).session(session);
 
-      const loadedCount = items.reduce((acc, i) => acc + i.quantity, 0);
-      const loadAmount = loadedCount * 400;
+      let salaryPerWorker = loadAmount / totalAttendances.length;
 
-      // if (!salaryRecord) {
-      //   const emptyAttendances = await Attendance.find({
-      //     date: {
-      //       $gte: new Date(today),
-      //       $lte: new Date(today.getTime() + 86399999),
-      //     },
-      //     unit: deliveredGroup,
-      //   }).session(session);
-
-      //   if (emptyAttendances.length === 0) {
-      //     await session.abortTransaction();
-      //     return response.error(
-      //       res,
-      //       "Davomat mavjud emas — SalaryRecord yaratib bo‘lmaydi"
-      //     );
-      //   }
-
-      //   const totalPercentage = emptyAttendances.reduce(
-      //     (sum, a) => sum + a.percentage,
-      //     0
-      //   );
-      //   const salaryPerPercent = loadAmount / totalPercentage;
-
-      //   const workers = emptyAttendances.map((a) => ({
-      //     employee: a.employee,
-      //     percentage: a.percentage,
-      //     amount: Math.round(salaryPerPercent * a.percentage),
-      //   }));
-
-      //   salaryRecord = new SalaryRecord({
-      //     date: new Date(),
-      //     department: deliveredGroup,
-      //     producedCount: 0,
-      //     loadedCount,
-      //     totalSum: loadAmount,
-      //     salaryPerPercent,
-      //     workers,
-      //   });
-      // } else {
-      //   const todayAttendances = await Attendance.find({
-      //     date: {
-      //       $gte: new Date(today),
-      //       $lte: new Date(today.getTime() + 86399999),
-      //     },
-      //     unit: deliveredGroup,
-      //   }).session(session);
-
-      //   const totalPercentage = todayAttendances.reduce(
-      //     (sum, a) => sum + a.percentage,
-      //     0
-      //   );
-      //   const newLoadedCount = salaryRecord.loadedCount + loadedCount;
-      //   const newTotalSum = salaryRecord.totalSum + loadAmount;
-      //   const newSalaryPerPercent = newTotalSum / totalPercentage;
-
-      //   const updatedWorkers = todayAttendances.map((a) => ({
-      //     employee: a.employee,
-      //     percentage: a.percentage,
-      //     amount: Math.round(newSalaryPerPercent * a.percentage),
-      //   }));
-
-      //   salaryRecord.loadedCount = newLoadedCount;
-      //   salaryRecord.totalSum = newTotalSum;
-      //   salaryRecord.salaryPerPercent = newSalaryPerPercent;
-      //   salaryRecord.workers = updatedWorkers;
-      // }
-
-      if (!salaryRecord) {
-        const emptyAttendances = await Attendance.find({
-          date: {
-            $gte: new Date(today),
-            $lte: new Date(today.getTime() + 86399999),
-          },
-          unit: deliveredGroup,
+      for (const dept of deliveredGroups) {
+        let salaryRecord = await SalaryRecord.findOne({
+          date: { $gte: startOfDay, $lte: endOfDay },
+          department: dept,
         }).session(session);
 
-        if (emptyAttendances.length === 0) {
-          // Davomat yo‘q – faqat SalaryRecord yaratmaymiz
-          salaryRecord = null;
-        } else {
-          const totalPercentage = emptyAttendances.reduce(
-            (sum, a) => sum + a.percentage,
-            0
-          );
-          const salaryPerPercent = loadAmount / totalPercentage;
+        const attendances = totalAttendances.filter((att) => att.unit === dept);
 
-          const workers = emptyAttendances.map((a) => ({
-            employee: a.employee,
-            percentage: a.percentage,
-            amount: Math.round(salaryPerPercent * a.percentage),
+        if (!salaryRecord) {
+          if (attendances.length === 0) continue; // Ishchilar yo‘q bo‘lsa, o‘tkazib yuboramiz
+
+          const workers = attendances.map((att) => ({
+            employee: att.employee,
+            percentage: att.percentage,
+            amount: salaryPerWorker,
           }));
 
           salaryRecord = new SalaryRecord({
             date: new Date(),
-            department: deliveredGroup,
+            department: dept,
             producedCount: 0,
-            loadedCount,
-            totalSum: loadAmount,
-            salaryPerPercent,
+            loadedCount: 0, // kerak bo‘lsa, loadedCount hisoblang
+            totalSum: salaryPerWorker * attendances.length,
             workers,
           });
+
+          await salaryRecord.save({ session });
+        } else {
+          // Faqat bugungi davomatdagi ishchilarga ish haqini qo‘shamiz
+          const empSet = new Set(
+            attendances.map((att) => att.employee.toString())
+          );
+
+          salaryRecord.workers.forEach((worker) => {
+            if (empSet.has(worker.employee.toString())) {
+              worker.amount = (worker.amount || 0) + salaryPerWorker;
+            }
+          });
+
+          salaryRecord.totalSum += salaryPerWorker * attendances.length;
+
+          await salaryRecord.save({ session, validateModifiedOnly: true });
         }
       }
 
-      if (salaryRecord) {
-        await salaryRecord.save({ session });
-      }
-
-      // await salaryRecord.save({ session });
+      // -------------------------------------------
 
       await session.commitTransaction();
       return response.success(res, "Mahsulotlar yetkazib berildi!");
