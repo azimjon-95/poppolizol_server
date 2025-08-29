@@ -25,7 +25,6 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-
 (async () => {
   await connectDB();
 })();
