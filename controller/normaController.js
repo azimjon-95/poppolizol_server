@@ -31,10 +31,6 @@ class NormaController {
         return response.error(res, "Bunday mahsulot normasi allaqachon mavjud");
       }
 
-      // Fetch factory data
-      const factory = await Factory.findOne().select("electricityPrice methaneGasPrice");
-
-
       // Fetch material data
       const materialData = await Material.find().select("price");
       if (!materialData || materialData.length === 0) {
@@ -58,8 +54,6 @@ class NormaController {
         category: category || null,
         salePrice,
         materials,
-        description: description || null,
-        size: req.body.size || null,
       });
 
       return response.success(res, "Norma muvaffaqiyatli yaratildi", norma);
@@ -71,16 +65,12 @@ class NormaController {
   async updateNorma(req, res) {
     try {
       const { id } = req.params;
-      const { productName, category, materials, salePrice, description, size, cost } = req.body;
+      const { productName, materials, salePrice, category } = req.body;
 
       // Validate required fields
-      if (!productName || !materials || !cost) {
+      if (!productName || !materials) {
         return response.error(res, "Mahsulot nomi, materiallar yoki xarajatlar kiritilmagan");
       }
-
-      // Fetch factory data
-      const factory = await Factory.findOne().select("electricityPrice methaneGasPrice").lean();
-
 
       // Fetch material data for provided material IDs
       const materialIds = materials.map(item => item.materialId);
@@ -96,16 +86,6 @@ class NormaController {
         materialCost += material.price * item.quantity;
       }
 
-      // Calculate utility costs
-      const gasCost = cost.gasPerUnit * factory.methaneGasPrice;
-      const electricityCost = cost.electricityPerUnit * factory.electricityPrice;
-
-      // Adjust otherExpenses to 1% of its original value
-      const adjustedOtherExpenses = cost.otherExpenses * 0.01;
-
-      // Calculate total cost
-      const totalCost = materialCost + gasCost + electricityCost + cost.laborCost + adjustedOtherExpenses;
-
       // Update Norma document
       const norma = await Norma.findByIdAndUpdate(
         id,
@@ -113,16 +93,7 @@ class NormaController {
           productName,
           category: category || null,
           salePrice,
-          materials,
-          description: description || null,
-          size: size || null,
-          cost: {
-            gasPerUnit: cost.gasPerUnit,
-            electricityPerUnit: cost.electricityPerUnit,
-            laborCost: cost.laborCost,
-            otherExpenses: adjustedOtherExpenses,
-            totalCost,
-          },
+          materials
         },
         { new: true, runValidators: true }
       ).lean();

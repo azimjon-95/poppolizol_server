@@ -86,7 +86,7 @@ router.delete("/factory/:id", factoryController.delete);
  */
 router.post("/norma/create", normaController.createNorma);
 router.get("/norma/all", normaController.getNorma);
-router.put("/norma/update/:id", normaValidation, normaController.updateNorma);
+router.put("/norma/update/:id", normaController.updateNorma);
 router.delete("/norma/delete/:id", normaController.deleteNorma);
 
 /**
