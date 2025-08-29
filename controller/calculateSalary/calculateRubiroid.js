@@ -32,7 +32,6 @@ async function calculateRuberoidSalaries({
     // 3. Mahsulotni aniqlaymiz
     const product = await Normas.findById(product_id).session(session);
     if (!product) {
-      console.warn("📛 Mahsulot topilmadi:", product_id);
       return null;
     }
 
@@ -149,7 +148,6 @@ async function reCalculateRuberoidSalaries({ date, session }) {
     }).session(session);
 
     if (!salaryRecord) {
-      console.warn("📛 SalaryRecord topilmadi");
       return null;
     }
 
@@ -158,7 +156,6 @@ async function reCalculateRuberoidSalaries({ date, session }) {
     const product = await Normas.findById(product_id).session(session);
 
     if (!product) {
-      console.warn("📛 Mahsulot topilmadi:", product_id);
       return null;
     }
 

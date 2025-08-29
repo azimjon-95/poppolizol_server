@@ -17,6 +17,8 @@ const {
 
 const updateSalaryRecordForDate = require("../controller/calculateSalary/reCalculate");
 
+const calculateLoadedPrices = require("../controller/calculateSalary/calculateLoadedPrices");
+
 const SalaryRecord = require("../model/salaryRecord");
 
 class AttendanceController {
@@ -199,6 +201,8 @@ class AttendanceController {
       }
 
       await updateSalaryRecordForDate(unit, date, session);
+
+      await calculateLoadedPrices(date, session);
 
       await session.commitTransaction();
       session.endSession();

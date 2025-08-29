@@ -155,7 +155,6 @@ const reCalculateOkisleniya = async (inputDate, session = null) => {
   }).session(session);
 
   if (!salaryRecord) {
-    console.log("SalaryRecord topilmadi: Okisleniya");
     return null;
   }
 

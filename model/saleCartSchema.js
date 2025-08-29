@@ -11,6 +11,7 @@ const customerSchema = new mongoose.Schema(
     phone: { type: String },
     companyAddress: { type: String },
     company: { type: String },
+    balans: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
