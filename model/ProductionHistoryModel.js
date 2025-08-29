@@ -1,36 +1,101 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
-const ProductionHistorySchema = new mongoose.Schema({
-    productNormaId: { type: mongoose.Schema.Types.ObjectId, ref: "productNorma", required: true },
-    productName: { type: String, required: true },
-    quantityProduced: { type: Number, required: true },
-    salePrice: { type: Number, default: 0 },
-    materialsUsed: [{
-        materialId: { type: mongoose.Schema.Types.ObjectId, ref: "materials" },
-        materialName: String,
-        quantityUsed: Number,
-        unitPrice: Number,
-    }],
-    materialStatistics: [{
-        materialId: { type: mongoose.Schema.Types.ObjectId, ref: "materials" },
-        materialName: String,
-        unit: String,
-        requiredQuantity: Number,
-        consumedQuantity: Number,
-        status: { type: String, enum: ["exceed", "insufficient", "equal"] },
-        difference: Number,
-    }],
-    totalCost: { type: Number, required: true },
-    marketType: {
-        type: String,
-        enum: ["tashqi", "ichki"],
-        default: "tashqi",
+const productionHistorySchema = new mongoose.Schema({
+    date: {
+        type: Date,
+        default: Date.now
     },
-    gasAmount: { type: Number },
-    electricity: { type: Number },
-    productionDate: { type: Date, default: Date.now },
-}, { timestamps: true });
+    products: [{
+        productName: {
+            type: String,
+            required: true
+        },
+        quantityProduced: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        salePrice: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        totalSaleValue: {
+            type: Number,
+            required: true,
+            min: 0
+        }
+    }],
+    materialsUsed: [{
+        materialId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Material',
+            required: true
+        },
+        materialName: {
+            type: String,
+            required: true
+        },
+        quantityUsed: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        unitPrice: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        totalCost: {
+            type: Number,
+            required: true,
+            min: 0
+        }
+    }],
+    materialStatistics: {
+        totalMaterialCost: {
+            type: Number,
+            required: true,
+            min: 0
+        }
+    },
+    gasConsumption: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    gasCost: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    electricityConsumption: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    electricityCost: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    otherExpenses: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    workerExpenses: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    totalBatchCost: {
+        type: Number,
+        required: true,
+        min: 0
+    }
+}, {
+    timestamps: true
+});
 
-const ProductionHistory = mongoose.model("ProductionHistory", ProductionHistorySchema);
-module.exports = ProductionHistory;
-
+module.exports = mongoose.model('ProductionHistory', productionHistorySchema);
