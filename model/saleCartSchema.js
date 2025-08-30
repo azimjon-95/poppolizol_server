@@ -113,3 +113,6 @@ const Salecart = mongoose.model("Salecart", saleSchema);
 const Customer = mongoose.model("Customer", customerSchema);
 
 module.exports = { Salecart, Customer };
+
+
+

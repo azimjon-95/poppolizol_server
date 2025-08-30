@@ -661,120 +661,206 @@ class SaleController {
     }
   }
 
-  // Process debt payment
+  // // Process debt payment
+  // async payDebt(req, res) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     const { amount, description, paymentType } = req.body;
+
+  //     // Validate input
+  //     if (amount <= 0) {
+  //       throw new Error("To‘lov summasi noto‘g‘ri kiritildi!");
+  //     }
+  //     if (!["naqt", "bank"].includes(paymentType)) {
+  //       throw new Error("To‘lov turi noto‘g‘ri kiritildi!");
+  //     }
+
+  //     // Fetch sale with session
+  //     const sale = await Salecart.findById(req.params.id).session(session);
+  //     if (!sale) {
+  //       throw new Error("Sotuv topilmadi!");
+  //     }
+
+  //     // Check if payment exceeds total amount
+  //     const newPaidAmount = sale.payment.paidAmount + amount;
+  //     if (newPaidAmount > sale.payment.totalAmount) {
+  //       throw new Error("To‘lov summasi yakuniy summadan oshib ketdi!");
+  //     }
+
+  //     // Get month for the plan
+  //     const currentDate = new Date(sale.createdAt);
+  //     const month = `${currentDate.getFullYear()}.${String(
+  //       currentDate.getMonth() + 1
+  //     ).padStart(2, "0")}`;
+
+  //     // Find plan for the sale's month
+  //     const plan = await Plan.findOne({
+  //       employeeId: sale.salerId,
+  //       month,
+  //     }).session(session);
+  //     if (!plan) {
+  //       throw new Error(`Sotuvchi uchun ${month} oyida plan topilmadi`);
+  //     }
+
+  //     // Update balance
+  //     await Balance.updateBalance(paymentType, "kirim", amount, session);
+
+  //     // Update sale payment details
+  //     const updatedSale = await Salecart.findByIdAndUpdate(
+  //       req.params.id,
+  //       {
+  //         $set: {
+  //           "payment.paidAmount": newPaidAmount,
+  //           "payment.debt": sale.payment.totalAmount - newPaidAmount,
+  //           "payment.status":
+  //             newPaidAmount >= sale.payment.totalAmount ? "paid" : "partial",
+  //         },
+  //         $push: {
+  //           "payment.paymentHistory": {
+  //             amount,
+  //             date: new Date(),
+  //             description,
+  //             paidBy: sale.salesperson,
+  //             paymentType,
+  //           },
+  //         },
+  //       },
+  //       { new: true, runValidators: true, session }
+  //     );
+
+  //     // Update plan
+  //     plan.achievedAmount += amount;
+  //     plan.progress = Math.min(
+  //       (plan.achievedAmount / plan.targetAmount) * 100,
+  //       100
+  //     );
+  //     await plan.save({ session });
+
+  //     // Create expense record
+  //     const expense = new Expense({
+  //       relatedId: sale._id.toString(),
+  //       type: "kirim",
+  //       paymentMethod: paymentType,
+  //       category: "Mijoz tulovi",
+  //       amount,
+  //       description,
+  //       date: new Date(),
+  //     });
+  //     await expense.save({ session });
+
+  //     // Commit transaction
+  //     await session.commitTransaction();
+
+  //     // Populate and return response
+  //     const populatedSale = await Salecart.findById(updatedSale._id)
+  //       .populate("customerId", "name type phone companyAddress")
+  //       .populate("salerId", "firstName lastName")
+  //       .lean();
+
+  //     return response.success(
+  //       res,
+  //       "Qarz to‘lovi muvaffaqiyatli!",
+  //       populatedSale
+  //     );
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     return response.serverError(
+  //       res,
+  //       "Qarz to‘lovida xatolik!",
+  //       error.message
+  //     );
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
+
+  // mijoz qarzini to‘lash
   async payDebt(req, res) {
-    const session = await mongoose.startSession();
+    const session = await Customer.startSession();
     session.startTransaction();
 
     try {
-      const { amount, description, paymentType } = req.body;
+      const { customerId, amount, description, paidBy, paymentType } = req.body;
 
-      // Validate input
-      if (amount <= 0) {
-        throw new Error("To‘lov summasi noto‘g‘ri kiritildi!");
-      }
-      if (!["naqt", "bank"].includes(paymentType)) {
-        throw new Error("To‘lov turi noto‘g‘ri kiritildi!");
+      if (!customerId || !amount) {
+        return response.warning(res, "Barcha maydonlar to‘ldirilishi kerak!");
       }
 
-      // Fetch sale with session
-      const sale = await Salecart.findById(req.params.id).session(session);
-      if (!sale) {
-        throw new Error("Sotuv topilmadi!");
+      const customer = await Customer.findById(customerId).session(session);
+      if (!customer) {
+        return response.notFound(res, "Mijoz topilmadi");
       }
 
-      // Check if payment exceeds total amount
-      const newPaidAmount = sale.payment.paidAmount + amount;
-      if (newPaidAmount > sale.payment.totalAmount) {
-        throw new Error("To‘lov summasi yakuniy summadan oshib ketdi!");
-      }
+      let remaining = amount + customer.balans;
 
-      // Get month for the plan
-      const currentDate = new Date(sale.createdAt);
-      const month = `${currentDate.getFullYear()}.${String(
-        currentDate.getMonth() + 1
-      ).padStart(2, "0")}`;
+      // qarzlari bor savdolarni eng eski tarixdan olish
+      const sales = await Salecart.find({
+        customerId,
+        "payment.debt": { $gt: 0 },
+      })
+        .sort({ createdAt: 1 })
+        .session(session);
 
-      // Find plan for the sale's month
-      const plan = await Plan.findOne({
-        employeeId: sale.salerId,
-        month,
-      }).session(session);
-      if (!plan) {
-        throw new Error(`Sotuvchi uchun ${month} oyida plan topilmadi`);
+      for (let sale of sales) {
+        if (remaining <= 0) break;
+
+        let debt = sale.payment.debt;
+        let payNow = Math.min(remaining, debt);
+
+        sale.payment.paidAmount += payNow;
+        sale.payment.debt -= payNow;
+        remaining -= payNow;
+
+        if (sale.payment.debt === 0) {
+          sale.payment.isActive = false;
+          sale.payment.status = "paid";
+        } else {
+          sale.payment.status = "partial";
+        }
+
+        sale.payment.paymentHistory.push({
+          amount: payNow,
+          paidBy,
+          paymentType: paymentType || "naqt",
+        });
+
+        await sale.save({ session });
+
+        // Create expense record for this sale
+        const expense = new Expense({
+          relatedId: sale._id.toString(),
+          type: "kirim",
+          paymentMethod: paymentType || "naqt",
+          category: "Mijoz tulovi",
+          amount: payNow,
+          description: description || "Mijoz qarz to'lovi",
+          date: new Date(),
+        });
+        await expense.save({ session });
       }
 
       // Update balance
-      await Balance.updateBalance(paymentType, "kirim", amount, session);
+      await Balance.updateBalance(paymentType || "naqt", "kirim", amount, session);
 
-      // Update sale payment details
-      const updatedSale = await Salecart.findByIdAndUpdate(
-        req.params.id,
-        {
-          $set: {
-            "payment.paidAmount": newPaidAmount,
-            "payment.debt": sale.payment.totalAmount - newPaidAmount,
-            "payment.status":
-              newPaidAmount >= sale.payment.totalAmount ? "paid" : "partial",
-          },
-          $push: {
-            "payment.paymentHistory": {
-              amount,
-              date: new Date(),
-              description,
-              paidBy: sale.salesperson,
-              paymentType,
-            },
-          },
-        },
-        { new: true, runValidators: true, session }
-      );
+      // qolgan pulni balansga yozib qo‘yamiz
+      customer.balans = remaining;
+      await customer.save({ session });
 
-      // Update plan
-      plan.achievedAmount += amount;
-      plan.progress = Math.min(
-        (plan.achievedAmount / plan.targetAmount) * 100,
-        100
-      );
-      await plan.save({ session });
-
-      // Create expense record
-      const expense = new Expense({
-        relatedId: sale._id.toString(),
-        type: "kirim",
-        paymentMethod: paymentType,
-        category: "Mijoz tulovi",
-        amount,
-        description,
-        date: new Date(),
-      });
-      await expense.save({ session });
-
-      // Commit transaction
       await session.commitTransaction();
+      session.endSession();
 
-      // Populate and return response
-      const populatedSale = await Salecart.findById(updatedSale._id)
-        .populate("customerId", "name type phone companyAddress")
-        .populate("salerId", "firstName lastName")
-        .lean();
-
-      return response.success(
-        res,
-        "Qarz to‘lovi muvaffaqiyatli!",
-        populatedSale
-      );
+      return response.success(res, "To'lov muvaffaqiyatli amalga oshirildi", {
+        qolganBalans: customer.balans,
+      });
     } catch (error) {
       await session.abortTransaction();
-      return response.serverError(
-        res,
-        "Qarz to‘lovida xatolik!",
-        error.message
-      );
-    } finally {
       session.endSession();
+      console.error(error);
+      return response.serverError(res, "Xatolik yuz berdi", { error: error.message });
     }
-  }
+  };
 
   //get customers all
   async getCompanys(req, res) {
@@ -903,45 +989,52 @@ class SaleController {
     }
   }
 
+  // Bitta customer va uning tarixi bilan olish
   async getFilteredSales(req, res) {
     try {
-      const { month } = req.query;
-
-      if (!month || !/^\d{2}\.\d{4}$/.test(month)) {
-        return response.error(
-          res,
-          "Noto‘g‘ri yoki yetishmayotgan 'month' parametri (MM.YYYY)"
-        );
+      // Barcha customerlarni topish
+      const customers = await Customer.find().lean();
+      if (!customers || customers.length === 0) {
+        return response.notFound(res, "Mijozlar topilmadi", []);
       }
 
-      const startDate = moment(month, "MM.YYYY").startOf("month").toDate();
-      const endDate = moment(month, "MM.YYYY").endOf("month").toDate();
+      // Har bir customer uchun sales tarixini olish
+      const result = await Promise.all(
+        customers.map(async (customer) => {
+          // Shu customerga tegishli barcha sales
+          const sales = await Salecart.find({ customerId: customer._id })
+            .populate("customerId", "name type phone company balans")
+            .lean();
 
-      const sales = await Salecart.find({
-        createdAt: { $gte: startDate, $lte: endDate },
-      })
-        .populate("customerId") // Populate the customerId field with Customer data
-        .sort({ createdAt: -1 });
+          // Balansni tekshirish va status berish
+          let balansStatus = "0";
+          if (customer.balans > 0) {
+            balansStatus = `Qarzdor`;
+          } else if (customer.balans < 0) {
+            balansStatus = `Haqdor`;
+          } else {
+            balansStatus = "Mavjud emas";
+          }
 
-      if (!sales.length) {
-        return response.success(
-          res,
-          "Ko‘rsatilgan oyning faol savdolari topilmadi",
-          []
-        );
-      }
+          // Har bir customer uchun ma'lumot
+          return {
+            ...customer,
+            balansStatus,
+            history: sales, // barcha buyurtmalar
+          };
+        })
+      );
 
+      // Yakuniy data
       return response.success(
         res,
         "Tanlangan oyning faol savdolar ro‘yxati",
-        sales
+        result
       );
     } catch (err) {
-      console.error("Error in getFilteredSales:", err);
       return response.serverError(res, "Server xatosi", err.message);
     }
   }
-
   // Process product returns
   async returnItems(req, res) {
     let session;
