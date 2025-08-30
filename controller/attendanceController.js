@@ -119,6 +119,7 @@ class AttendanceController {
           await recalculatePolizolSalaries(date, session);
           await reCalculateOkisleniya(date, session);
           await reCalculateRuberoidSalaries(date, session);
+          await calculateLoadedPrices(date, session);
         }
       } else {
         attendanceRecord = await Attendance.findOneAndUpdate(
@@ -135,6 +136,7 @@ class AttendanceController {
           await recalculatePolizolSalaries(date, session);
           await reCalculateOkisleniya(date, session);
           await reCalculateRuberoidSalaries(date, session);
+          await calculateLoadedPrices(date, session);
         }
       }
 
@@ -346,6 +348,15 @@ class AttendanceController {
       if (user.unit === "polizol") {
         await recalculatePolizolSalaries(user?.date, session);
       }
+
+      if (user.unit === "rubiroid") {
+        await recalculateRubiroidSalaries(user?.date, session);
+      }
+
+      if (user.unit === "Okisleniya") {
+        await recalculateOkisleniyaSalaries(user?.date, session);
+      }
+      await calculateLoadedPrices(user?.date, session);
 
       await session.commitTransaction();
       session.endSession();
