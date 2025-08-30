@@ -22,11 +22,7 @@ const factorySchema = new mongoose.Schema({
 
 const productSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      unique: true, // nomlar unikal bo'lishi kerak
-    },
+    name: { type: String, required: true, unique: true }, // nom unikal
     category: {
       type: String,
       enum: [
@@ -42,17 +38,21 @@ const productSchema = new mongoose.Schema(
       ],
       required: true,
     },
-    productionCost: {
-      type: Number,
-      default: 0,
-    },
-    loadingCost: {
-      type: Number,
-      default: 0,
-    },
+    productionCost: { type: Number, default: 0 }, // Ishlab chiqarish
+    loadingCost: { type: Number, default: 0 }, // Yuklash / tushirish
+    takeDownCost: { type: Number, default: 0 }, // Alohida kerak bo‘lsa
+    qozongaTashlash: { type: Number, default: 0 }, // Qozonga tashlash
   },
   { timestamps: true }
 );
+
+// Qo'shimcha: salomat bo‘lishi uchun minimal validatsiya
+productSchema.path("productionCost").get((v) => v ?? 0);
+productSchema.path("loadingCost").get((v) => v ?? 0);
+productSchema.path("takeDownCost").get((v) => v ?? 0);
+productSchema.path("qozongaTashlash").get((v) => v ?? 0);
+
+productSchema.set("toJSON", { getters: true });
 
 // ===================WorkerExpenses========================
 
