@@ -21,8 +21,11 @@ const {
   calculateRuberoidSalaries,
 } = require("./calculateSalary/calculateRubiroid");
 
-class ProductionSystem {
+const reCalculateGlobalSalaries = require("./calculateSalary/globalCalculate");
 
+const SalaryRecord = require("../model/salaryRecord");
+
+class ProductionSystem {
   async productionProcess(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -40,7 +43,10 @@ class ProductionSystem {
       }
 
       // Calculate total quantity
-      const totalQuantity = products.reduce((sum, p) => sum + Number(p.quantity), 0);
+      const totalQuantity = products.reduce(
+        (sum, p) => sum + Number(p.quantity),
+        0
+      );
 
       if (totalQuantity <= 0) {
         return response.error(res, "Umumiy miqdor noto‘g‘ri");
@@ -135,12 +141,8 @@ class ProductionSystem {
       // Fetch factory
       const [factory] = await Factory.find().session(session);
       if (!factory) {
-        return response.notFound(
-          res,
-          "Zavod ma'lumotlari topilmadi!"
-        );
+        return response.notFound(res, "Zavod ma'lumotlari topilmadi!");
       }
-
 
       // Calculate resource costs
       const electricityCostPerKWH = Number(factory.electricityPrice);
@@ -148,7 +150,9 @@ class ProductionSystem {
       const totalElectricityUsed = parseFloat(
         (utilities.electricityConsumption || 0).toFixed(2)
       );
-      const totalGasUsed = parseFloat((utilities.gasConsumption || 0).toFixed(2));
+      const totalGasUsed = parseFloat(
+        (utilities.gasConsumption || 0).toFixed(2)
+      );
       const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
       const totalGasCost = totalGasUsed * gasCostPerKWH;
 
@@ -193,7 +197,7 @@ class ProductionSystem {
           materialName: material.name,
           quantityUsed: consumedQuantity,
           unitPrice,
-          totalCost: cost
+          totalCost: cost,
         });
       }
 
@@ -209,7 +213,10 @@ class ProductionSystem {
         const quantity = Number(product.quantity);
 
         if (!normaId || !quantity || quantity <= 0) {
-          return response.error(res, `Mahsulot normasi yoki miqdori noto‘g‘ri uchun ${productName}`);
+          return response.error(
+            res,
+            `Mahsulot normasi yoki miqdori noto‘g‘ri uchun ${productName}`
+          );
         }
 
         const productNorma = await ProductNorma.findById(normaId)
@@ -260,27 +267,34 @@ class ProductionSystem {
           productName: productNorma.productName,
           quantityProduced: quantity,
           salePrice: Number(productNorma.salePrice || 0),
-          totalSaleValue: quantity * Number(productNorma.salePrice || 0)
+          totalSaleValue: quantity * Number(productNorma.salePrice || 0),
         });
       }
 
       // Calculate shared costs per unit
-      const totalSharedCost = totalMaterialCost + totalGasCost + totalElectricityCost + additionalAmount;
-      const sharedPerUnit = totalQuantity > 0 ? totalSharedCost / totalQuantity : 0;
+      const totalSharedCost =
+        totalMaterialCost +
+        totalGasCost +
+        totalElectricityCost +
+        additionalAmount;
+      const sharedPerUnit =
+        totalQuantity > 0 ? totalSharedCost / totalQuantity : 0;
 
       // Total cost for the batch
       const totalCostSum = parseFloat(
         (totalSharedCost + totalWorkerCost + totalLoadingCost).toFixed(2)
       );
 
-
-
       // Process each product
       const producedMessages = [];
 
       for (const prodData of productDataList) {
         const productionCost = parseFloat(
-          (prodData.workerPayPerUnit + prodData.loadingPayPerUnit + sharedPerUnit).toFixed(2)
+          (
+            prodData.workerPayPerUnit +
+            prodData.loadingPayPerUnit +
+            sharedPerUnit
+          ).toFixed(2)
         );
 
         // Check for existing FinishedProduct
@@ -314,28 +328,87 @@ class ProductionSystem {
 
         // Handle special salary calculations
         const lowerProductName = prodData.productName.toLowerCase();
+        console.log("111", lowerProductName);
+        let date = new Date();
+        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(date.setHours(23, 59, 59, 0));
+
         if (lowerProductName.includes("ruberoid")) {
-          await calculateRuberoidSalaries({
-            producedCount: prodData.quantity,
-            product_id: prodData.productNorma._id,
-            date,
-            session,
-          });
+          console.log(">>", "ruberoid");
+
+          // await calculateRuberoidSalaries({
+          //   producedCount: prodData.quantity,
+          //   product_id: prodData.productNorma._id,
+          //   date,
+          //   session,
+          // });
+
+          let exactSalaryRecord = await SalaryRecord.findOne({
+            date: { $gte: startOfDay, $lte: endOfDay },
+            department: "ruberoid",
+          }).session(session);
+
+          if (!exactSalaryRecord) {
+            await SalaryRecord.create(
+              [
+                {
+                  date: date,
+                  department: "ruberoid",
+                  producedCount: prodData.quantity,
+                },
+              ],
+              { session }
+            );
+            await reCalculateGlobalSalaries("ruberoid", date, session);
+          }
+
+          if (exactSalaryRecord) {
+            exactSalaryRecord.producedCount += prodData.quantity;
+            await exactSalaryRecord.save({ session });
+            await reCalculateGlobalSalaries("polizol", date, session);
+          }
         }
 
         if (
           lowerProductName.includes("polizol") ||
           lowerProductName.includes("folygoizol")
         ) {
-          await calculatePolizolSalaries({
-            producedCount: prodData.quantity,
-            loadedCount: 0,
-            session,
-            date,
-          });
+          // await calculatePolizolSalaries({
+          //   producedCount: prodData.quantity,
+          //   loadedCount: 0,
+          //   session,
+          //   date,
+          // });
+
+          let exactSalaryRecord = await SalaryRecord.findOne({
+            date: { $gte: startOfDay, $lte: endOfDay },
+            department: "polizol",
+          }).session(session);
+
+          if (!exactSalaryRecord) {
+            await SalaryRecord.create(
+              [
+                {
+                  date: date,
+                  department: "polizol",
+                  producedCount: prodData.quantity,
+                },
+              ],
+              { session }
+            );
+            await reCalculateGlobalSalaries("polizol", date, session);
+          }
+
+          if (exactSalaryRecord) {
+            exactSalaryRecord.producedCount += prodData.quantity;
+            await exactSalaryRecord.save({ session });
+            await reCalculateGlobalSalaries("polizol", date, session);
+          }
         }
 
-        producedMessages.push(`${prodData.productNorma.productName} dan ${prodData.quantity} : ""}`);
+        producedMessages.push(
+          `${prodData.productNorma.productName} dan ${prodData.quantity} : ""}`
+        );
       }
 
       // Record batch-level production history optimally
@@ -352,7 +425,7 @@ class ProductionSystem {
             electricityCost: totalElectricityCost,
             otherExpenses: additionalAmount,
             workerExpenses: totalWorkerCost + totalLoadingCost, // Combined worker and loading costs
-            totalBatchCost: totalCostSum
+            totalBatchCost: totalCostSum,
           },
         ],
         { session }
@@ -361,7 +434,7 @@ class ProductionSystem {
       await session.commitTransaction();
       return response.created(
         res,
-        `✅ Ishlab chiqarildi: ${producedMessages.join(', ')}`,
+        `✅ Ishlab chiqarildi: ${producedMessages.join(", ")}`,
         {
           totalCost: totalCostSum,
           totalElectricityUsed,
@@ -381,7 +454,6 @@ class ProductionSystem {
       session.endSession();
     }
   }
-
 
   async finishedProducts(req, res) {
     try {
@@ -416,7 +488,6 @@ class ProductionSystem {
     }
   }
 
-
   // Get production history
   async productionHistory(req, res) {
     try {
@@ -450,8 +521,7 @@ class ProductionSystem {
           $gte: start,
           $lte: new Date(end.setHours(23, 59, 59, 999)), // Include full end date
         },
-      })
-        .sort({ createdAt: -1 });
+      }).sort({ createdAt: -1 });
 
       return response.success(
         res,
@@ -525,7 +595,8 @@ class ProductionSystem {
         session.endSession();
         return response.error(
           res,
-          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${bn3Material?.quantity || 0
+          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${
+            bn3Material?.quantity || 0
           }`
         );
       }

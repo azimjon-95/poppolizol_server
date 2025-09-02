@@ -3,21 +3,22 @@ const Attendance = require("../model/attendanceModal");
 const Admins = require("../model/adminModel");
 const response = require("../utils/response");
 
-const {
-  recalculatePolizolSalaries,
-} = require("../controller/calculateSalary/calculatePolizol");
+// const {
+//   recalculatePolizolSalaries,
+// } = require("../controller/calculateSalary/calculatePolizol");
 
-const {
-  reCalculateOkisleniya,
-} = require("../controller/calculateSalary/calculateOchisleniya");
+// const {
+//   reCalculateOkisleniya,
+// } = require("../controller/calculateSalary/calculateOchisleniya");
 
-const {
-  reCalculateRuberoidSalaries,
-} = require("../controller/calculateSalary/calculateRubiroid");
+// const {
+//   reCalculateRuberoidSalaries,
+// } = require("../controller/calculateSalary/calculateRubiroid");
 
-const updateSalaryRecordForDate = require("../controller/calculateSalary/reCalculate");
+// const updateSalaryRecordForDate = require("../controller/calculateSalary/reCalculate");
 
 const calculateLoadedPrices = require("../controller/calculateSalary/calculateLoadedPrices");
+const reCalculateGlobalSalaries = require("../controller/calculateSalary/globalCalculate");
 
 const SalaryRecord = require("../model/salaryRecord");
 
@@ -110,15 +111,19 @@ class AttendanceController {
               employee: employeeId,
               date: new Date(date),
               percentage,
-              unit,
+              unit: user.unit,
             },
           ],
           { session }
         );
         if (!cleaning) {
-          await recalculatePolizolSalaries(date, session);
-          await reCalculateOkisleniya(date, session);
-          await reCalculateRuberoidSalaries(date, session);
+          // await recalculatePolizolSalaries(date, session);
+          // await reCalculateOkisleniya(date, session);
+          // await reCalculateRuberoidSalaries(date, session);
+          let unitForSalary = user.unit.includes("rubiroid")
+            ? "ruberoid"
+            : unit;
+          await reCalculateGlobalSalaries(unitForSalary, date, session);
           await calculateLoadedPrices(date, session);
         }
       } else {
@@ -128,14 +133,19 @@ class AttendanceController {
             employee: employeeId,
             date: new Date(date),
             percentage: realPercentage,
-            unit,
+            unit: user.unit,
           },
           { upsert: true, new: true, session }
         );
         if (!cleaning) {
-          await recalculatePolizolSalaries(date, session);
-          await reCalculateOkisleniya(date, session);
-          await reCalculateRuberoidSalaries(date, session);
+          // await recalculatePolizolSalaries(date, session);
+          // await reCalculateOkisleniya(date, session);
+          // await reCalculateRuberoidSalaries(date, session);
+
+          let unitForSalary = user.unit.includes("rubiroid")
+            ? "ruberoid"
+            : user.unit;
+          await reCalculateGlobalSalaries(unitForSalary, date, session);
           await calculateLoadedPrices(date, session);
         }
       }
@@ -189,21 +199,51 @@ class AttendanceController {
           let totalSum = totalPercentage * 120000;
           let salaryPerPercent = totalSum / totalPercentage;
 
-          salaryRecord.workers.push({
-            employee: employeeId,
-            percentage: percentage,
-            amount: 120000 * percentage,
-          });
+          // salaryRecord.workers.push({
+          //   employee: employeeId,
+          //   percentage: percentage,
+          //   amount: 120000 * percentage,
+          // });
 
-          salaryRecord.totalSum = totalSum;
+          // salaryRecord.totalSum = totalSum;
+          // salaryRecord.salaryPerPercent = salaryPerPercent;
+
+          // await salaryRecord.save({ session });
+
+          // agar worker mavjud bo'lsa amount qo'shamiz, aks holda yangi yozuv qo'shamiz
+          const existingIdx = salaryRecord.workers.findIndex(
+            (w) => w.employee.toString() === employeeId.toString()
+          );
+          const addAmount = 120000 * percentage;
+          if (existingIdx >= 0) {
+            salaryRecord.workers[existingIdx].amount =
+              (salaryRecord.workers[existingIdx].amount || 0) + addAmount;
+            // agar kerak bo'lsa percentage yangilash:
+            salaryRecord.workers[existingIdx].percentage = percentage;
+          } else {
+            salaryRecord.workers.push({
+              employee: employeeId,
+              percentage: percentage,
+              amount: addAmount,
+            });
+          }
+
+          salaryRecord.totalSum = salaryRecord.workers.reduce(
+            (sum, w) => sum + w.amount,
+            0
+          );
           salaryRecord.salaryPerPercent = salaryPerPercent;
 
           await salaryRecord.save({ session });
         }
       }
 
-      await updateSalaryRecordForDate(unit, date, session);
+      // await updateSalaryRecordForDate(unit, date, session);
 
+      let unitForSalary = user.unit.includes("rubiroid")
+        ? "ruberoid"
+        : user.unit;
+      await reCalculateGlobalSalaries(unitForSalary, date, session);
       await calculateLoadedPrices(date, session);
 
       await session.commitTransaction();
@@ -345,18 +385,22 @@ class AttendanceController {
 
       await Attendance.findByIdAndDelete(attendanceId).session(session);
 
-      if (user.unit === "polizol") {
-        await recalculatePolizolSalaries(user?.date, session);
-      }
+      // if (user.unit === "polizol") {
+      //   await recalculatePolizolSalaries(user?.date, session);
+      // }
 
-      if (user.unit === "rubiroid") {
-        await recalculateRubiroidSalaries(user?.date, session);
-      }
+      // if (user.unit === "rubiroid") {
+      //   await recalculateRubiroidSalaries(user?.date, session);
+      // }
 
-      if (user.unit === "Okisleniya") {
-        await recalculateOkisleniyaSalaries(user?.date, session);
-      }
-      await calculateLoadedPrices(user?.date, session);
+      // if (user.unit === "Okisleniya") {
+      //   await recalculateOkisleniyaSalaries(user?.date, session);
+      // }
+      let unitForSalary = user.unit.includes("rubiroid")
+        ? "ruberoid"
+        : user.unit;
+      await reCalculateGlobalSalaries(unitForSalary, user?.date, session);
+      await calculateLoadedPrices(user.unit, user?.date, session);
 
       await session.commitTransaction();
       session.endSession();

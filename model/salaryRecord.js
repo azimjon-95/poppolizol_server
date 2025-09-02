@@ -28,16 +28,9 @@ const SalaryRecordSchema = new Schema(
       enum: ["polizol", "Okisleniya", "ruberoid"], // mumkin bo‘lsa boshqa bo‘limlar ham qo‘shiladi
       required: true,
     },
-    producedCount: {
-      // polizol
-      type: Number,
-      default: 0,
-    },
-    loadedCount: {
-      // yuklangan yuk soni
-      type: Number,
-      default: 0,
-    },
+    producedCount: { type: Number, default: 0 },
+    loadedCount: { type: Number, default: 0 }, // dona hisobida
+    loadedCountKg: { type: Number, default: 0 }, // kilo hisobida
     btm_3: {
       // qozonga tashlangan bitum 3 marka
       type: Number,
@@ -55,11 +48,11 @@ const SalaryRecordSchema = new Schema(
     },
     totalSum: {
       type: Number,
-      required: true,
+      default: 0,
     },
     salaryPerPercent: {
       type: Number,
-      required: true,
+      default: 0,
     },
     workers: [WorkerShareSchema],
     type: {

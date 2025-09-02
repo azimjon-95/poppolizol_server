@@ -2,6 +2,7 @@ const moment = require("moment-timezone");
 const Attendance = require("../../model/attendanceModal");
 const SalaryRecord = require("../../model/salaryRecord");
 const Normas = require("../../model/productNormaSchema");
+const { Product: ProductPriceInfo } = require("../../model/factoryModel");
 
 const TIMEZONE = "Asia/Tashkent";
 
@@ -36,25 +37,29 @@ async function calculateRuberoidSalaries({
     }
 
     const name = product.productName?.trim();
-    const price_2000 = new Set([
-      "Ruberoid RKP-250 9m (Yupqa)",
-      "Ruberoid RKP-250 10m (Yupqa)",
-      "Ruberoid RKP-300 9m (O‘rta)",
-      "Ruberoid RKP-350 10m (Qalin)",
-    ]);
-    const price_3000 = new Set([
-      "Ruberoid RKP-250 15m (Yupqa)",
-      "Ruberoid RKP-300 15m (O‘rta)",
-      "Ruberoid RKP-350 15m (Qalin)",
-    ]);
+    let productInfo = await ProductPriceInfo.findOne({
+      category: "Ruberoid",
+      name: name,
+    });
+    // const price_2000 = new Set([
+    //   "Ruberoid RKP-250 9m (Yupqa)",
+    //   "Ruberoid RKP-250 10m (Yupqa)",
+    //   "Ruberoid RKP-300 9m (O‘rta)",
+    //   "Ruberoid RKP-350 10m (Qalin)",
+    // ]);
+    // const price_3000 = new Set([
+    //   "Ruberoid RKP-250 15m (Yupqa)",
+    //   "Ruberoid RKP-300 15m (O‘rta)",
+    //   "Ruberoid RKP-350 15m (Qalin)",
+    // ]);
 
-    let unitPrice = 0;
-    if (price_2000.has(name)) unitPrice = 2000;
-    else if (price_3000.has(name)) unitPrice = 3000;
-    else {
-      console.warn("📛 Narx belgilanmagan mahsulot:", name);
-      return null;
-    }
+    let unitPrice = productInfo.productionCost || 0;
+    // if (price_2000.has(name)) unitPrice = 2000;
+    // else if (price_3000.has(name)) unitPrice = 3000;
+    // else {
+    //   console.warn("📛 Narx belgilanmagan mahsulot:", name);
+    //   return null;
+    // }
 
     const totalPrice = producedCount * unitPrice;
 
@@ -159,30 +164,38 @@ async function reCalculateRuberoidSalaries({ date, session }) {
       return null;
     }
 
-    const name = product.productName?.trim();
-    const price_2000 = new Set([
-      "Ruberoid RKP-250 9m (Yupqa)",
-      "Ruberoid RKP-250 10m (Yupqa)",
-      "Ruberoid RKP-300 9m (O‘rta)",
-      "Ruberoid RKP-350 10m (Qalin)",
-    ]);
-    const price_3000 = new Set([
-      "Ruberoid RKP-250 15m (Yupqa)",
-      "Ruberoid RKP-300 15m (O‘rta)",
-      "Ruberoid RKP-350 15m (Qalin)",
-    ]);
+    let productInfo = await ProductPriceInfo.findOne({
+      category: "Ruberoid",
+      name: name,
+    });
 
-    let unitPrice = 0;
-    if (price_2000.has(name)) unitPrice = 2000;
-    else if (price_3000.has(name)) unitPrice = 3000;
-    else {
-      console.warn("📛 Narx belgilanmagan mahsulot:", name);
-      return null;
-    }
+    const name = product.productName?.trim();
+    // const price_2000 = new Set([
+    //   "Ruberoid RKP-250 9m (Yupqa)",
+    //   "Ruberoid RKP-250 10m (Yupqa)",
+    //   "Ruberoid RKP-300 9m (O‘rta)",
+    //   "Ruberoid RKP-350 10m (Qalin)",
+    // ]);
+    // const price_3000 = new Set([
+    //   "Ruberoid RKP-250 15m (Yupqa)",
+    //   "Ruberoid RKP-300 15m (O‘rta)",
+    //   "Ruberoid RKP-350 15m (Qalin)",
+    // ]);
+
+    // let unitPrice = 0;
+    let unitPrice = productInfo.productionCost || 0;
+
+    // if (price_2000.has(name)) unitPrice = 2000;
+    // else if (price_3000.has(name)) unitPrice = 3000;
+    // else {
+    // console.warn("📛 Narx belgilanmagan mahsulot:", name);
+    // return null;
+    // }
 
     const totalPrice = producedCount * unitPrice;
 
     // 4. Bonuslar
+    
     const bonusPerExtra = 100000;
     const extraWorkers = attendances.filter((a) => a.percentage > 1);
     const extraTotal = extraWorkers.length * bonusPerExtra;

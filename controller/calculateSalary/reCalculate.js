@@ -1,6 +1,7 @@
 const Attendance = require("../../model/attendanceModal");
 const SalaryRecord = require("../../model/salaryRecord");
 const Salecart = require("../../model/saleCartSchema");
+const { Product: ProductPriceInfo } = require("../../model/factoryModel");
 
 async function updateSalaryRecordForDate(department, date, externalSession) {
   // Transaction session — tashqaridan kelsa o‘sha, kelmasa yangi yaratamiz
@@ -36,6 +37,8 @@ async function updateSalaryRecordForDate(department, date, externalSession) {
       endOfDay,
       session
     );
+
+    // let loadedPrice = await ProductPriceInfo
 
     const loadAmount = loadedCountFromDeliveries * 400;
     const totalPercentage = attendances.reduce(

@@ -2,6 +2,8 @@ const moment = require("moment-timezone");
 const Attendance = require("../../model/attendanceModal");
 const SalaryRecord = require("../../model/salaryRecord");
 
+const { Product: ProductPriceInfo } = require("../../model/factoryModel");
+
 const TIMEZONE = "Asia/Tashkent";
 
 function getDayRange(dateInput) {
@@ -28,8 +30,17 @@ async function calculatePolizolSalaries({
 
   if (todayAttendances.length === 0) return null;
 
-  const unitProductionPrice = 2800;
-  const unitLoadPrice = 400;
+  let prices = await ProductPriceInfo.find({
+    category: { $in: ["Polizol"] },
+  }).session(session);
+
+  let priceMap = prices.reduce((acc, item) => {
+    acc[item.category] = item;
+    return acc;
+  }, {});
+
+  const unitProductionPrice = priceMap["Polizol"].productionCost;
+  const unitLoadPrice = priceMap["Polizol"].loadingCost;
 
   let salaryRecord = await SalaryRecord.findOne({
     date: { $gte: today, $lte: endOfDay },
@@ -106,8 +117,19 @@ async function recalculatePolizolSalaries(inputDate, session = null) {
   const producedCount = salaryRecord?.producedCount || 0;
   const loadedCount = salaryRecord?.loadedCount || 0;
 
-  const unitProductionPrice = 2800;
-  const unitLoadPrice = 400;
+  // 1. Bitta query bilan barcha kerakli narxlarni olish
+
+  let prices = await ProductPriceInfo.find({
+    category: { $in: ["Polizol"] },
+  }).session(session);
+
+  let priceMap = prices.reduce((acc, item) => {
+    acc[item.category] = item;
+    return acc;
+  }, {});
+
+  const unitProductionPrice = priceMap["Polizol"].productionCost;
+  const unitLoadPrice = priceMap["Polizol"].loadingCost;
 
   const totalProductionAmount = producedCount * unitProductionPrice;
   const totalLoadAmount = loadedCount * unitLoadPrice;

@@ -1,5 +1,6 @@
 const Attendance = require("../../model/attendanceModal");
 const SalaryRecord = require("../../model/salaryRecord");
+const { Product: ProductPriceInfo } = require("../../model/factoryModel");
 
 const calculateOchisleniyaBN3 = async (
   btm3,
@@ -23,10 +24,20 @@ const calculateOchisleniyaBN3 = async (
     console.log("Davomat topilmadi: Okisleniya");
     return null;
   }
+  // 1. Bitta query bilan barcha kerakli narxlarni olish
+  let prices = await ProductPriceInfo.find({
+    category: { $in: ["Bn_3", "Bn_5"] },
+  }).session(session);
 
-  // 2. Ish haqi summasini hisoblash
-  const btm3Salary = btm3 * 25;
-  const btm5Salary = btm5 * 70;
+  // 2. Oson ishlatish uchun object qilib olish
+  let priceMap = prices.reduce((acc, item) => {
+    acc[item.category] = item;
+    return acc;
+  }, {});
+
+  // 3. Hisoblash
+  const btm3Salary = btm3 * (priceMap["Bn_3"]?.loadingCost || 0);
+  const btm5Salary = btm5 * (priceMap["Bn_5"]?.productionCost || 0);
   const totalSalary = btm3Salary + btm5Salary;
 
   // 3. Umumiy foiz
@@ -105,7 +116,12 @@ const CalculateBN5forSale = async (btm5_sale, inputDate, session = null) => {
       0
     );
 
-    let btmtSalePrice = btm5_sale * 150;
+    let btm5_mel_sale_price = await ProductPriceInfo.findOne({
+      category: "Bn_5_mel",
+    }).session(session);
+    btm5_mel_sale_price = btm5_mel_sale_price?.productionCost || 0;
+
+    let btmtSalePrice = btm5_sale * btm5_mel_sale_price;
     let totalPrice = salaryRecord?.totalSum || 0 + btmtSalePrice;
     const salaryPerPercent = totalPrice / totalPercentage;
 
@@ -171,10 +187,27 @@ const reCalculateOkisleniya = async (inputDate, session = null) => {
     return null;
   }
 
-  // Eski btm qiymatlaridan foydalangan holda qayta hisoblash
-  const btm3Salary = (salaryRecord.btm_3 || 0) * 25;
-  const btm5Salary = (salaryRecord.btm_5 || 0) * 70;
-  const btm5SaleSalary = (salaryRecord.btm_5_sale || 0) * 150;
+  // 1. Kerakli barcha kategoriyalarni bitta query bilan olish
+  let prices = await ProductPriceInfo.find({
+    category: { $in: ["Bn_3", "Bn_5", "Bn_5_mel"] },
+  }).session(session);
+
+  // 2. Oson ishlatish uchun object shakliga o'tkazish
+  let priceMap = prices.reduce((acc, item) => {
+    acc[item.category] = item;
+    return acc;
+  }, {});
+
+  // 3. Hisoblash
+  const btm3Salary =
+    (salaryRecord.btm_3 || 0) * (priceMap["Bn_3"]?.loadingCost || 0);
+
+  const btm5Salary =
+    (salaryRecord.btm_5 || 0) * (priceMap["Bn_5"]?.loadingCost || 0);
+
+  const btm5SaleSalary =
+    (salaryRecord.btm_5_sale || 0) *
+    (priceMap["Bn_5_mel"]?.productionCost || 0);
 
   const totalSalary = btm3Salary + btm5Salary + btm5SaleSalary;
 
