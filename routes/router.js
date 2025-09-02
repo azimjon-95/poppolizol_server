@@ -167,7 +167,7 @@ router.post("/sales", SaleController.createSale);
 router.get("/sales/:id", SaleController.getSaleById);
 router.put("/sales/:id", SaleController.updateSale);
 router.delete("/sales/:id", SaleController.deleteSale);
-router.post("/sales/:id/pay-debt", SaleController.payDebt);
+router.post("/sales/pay-debt", SaleController.payDebt);
 router.get("/filtered", SaleController.getFilteredSales);
 router.post("/sales/:id/return", SaleController.returnItems);
 router.get("/sales/customer", SaleController.getCustomerSales);

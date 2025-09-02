@@ -1,5 +1,6 @@
 const { Salecart, Customer } = require("../model/saleCartSchema");
 const Expense = require("../model/expenseModel");
+const Material = require("../model/wherehouseModel");
 const Balance = require("../model/balance");
 const Employee = require("../model/adminModel");
 const Plan = require("../model/planSalerModel");
@@ -95,16 +96,28 @@ class SaleController {
       }
 
       for (const item of items) {
-        const product = await FinishedProduct.findById(item._id).session(
-          session
-        );
-        if (!product) {
-          await session.abortTransaction();
-          return response.notFound(
-            res,
-            `Maxsulot topilmadi: ${item.productName}`
-          );
+        let product;
+        product = await Material.findById(item._id).session(session);
+
+        if (product) {
+          // Agar Material bo'lsa, productionCost shart emas → default 0 beramiz
+          item.productionCost = 0;
+        } else {
+          product = await FinishedProduct.findById(item._id).session(session);
+
+          if (!product) {
+            await session.abortTransaction();
+            return response.notFound(
+              res,
+              `Maxsulot topilmadi: ${item.productName || item.name}`
+            );
+          }
+
+          // Agar FinishedProduct bo‘lsa → productdan olish
+          item.productionCost = product.productionCost;
         }
+
+        // Assign the found product's ID to item.productId
         item.productId = item._id;
       }
 
@@ -168,86 +181,119 @@ class SaleController {
     session.startTransaction();
 
     try {
-      const { saleId, items, transport, transportCost, deliveredGroups } =
-        req.body;
+      const { saleId, items, transport, transportCost, deliveredGroups } = req.body;
 
-      let loadAmount = 0;
+
+      // Har bir item uchun discountedPrice * quantity
+      const total = items.reduce((sum, item) => {
+        return sum + (item.discountedPrice * item.quantity);
+      }, 0);
+
 
       if (!saleId || !items || !transport || transportCost === undefined) {
         await session.abortTransaction();
         return response.error(res, "Barcha maydonlar to'ldirilishi shart");
       }
 
-      const sale = await Salecart.findById(saleId).session(session);
-      if (!sale) {
+      // 1️⃣ Customer olish
+      const customer = await Customer.findById(saleId).session(session);
+      if (!customer) {
         await session.abortTransaction();
-        return response.notFound(res, "Sotuv topilmadi");
+        return response.notFound(res, "Mijoz topilmadi");
       }
 
-      let transportRecord = await Transport.findOne({ transport }).session(
-        session
-      );
+      // 2️⃣ Mijozning sotuv tarixlari
+      const sales = await Salecart.find({ customerId: customer._id }).session(session);
+      if (!sales || sales.length === 0) {
+        await session.abortTransaction();
+        return response.notFound(res, "Mijozning sotuv tarixi topilmadi");
+      }
+
+      // 3️⃣ Transport yozuvi
+      let transportRecord = await Transport.findOne({ transport }).session(session);
       if (!transportRecord) {
-        transportRecord = new Transport({
-          transport,
-          balance: transportCost,
-        });
+        transportRecord = new Transport({ transport, balance: transportCost });
       } else {
         transportRecord.balance += transportCost;
       }
       await transportRecord.save({ session });
 
+      // 4️⃣ Itemlar bo‘yicha yurish
       for (const item of items) {
-        const { productId, quantity } = item;
+        const { productId, productName, quantity } = item;
 
-        const product = await FinishedProduct.findById(productId).session(
-          session
-        );
-        if (!product) {
-          await session.abortTransaction();
-          return response.notFound(res, `Mahsulot topilmadi: ${productId}`);
+        // Sotuv tarixlaridan topish
+        let targetSale = null;
+        let saleItem = null;
+
+        for (const sale of sales) {
+          const found = sale.items.find(
+            (i) =>
+              i.productId.toString() === productId.toString() &&
+              i.productName === productName
+          );
+          if (found) {
+            targetSale = sale;
+            saleItem = found;
+            break;
+          }
         }
 
-        if (product.quantity < quantity) {
+        if (!targetSale || !saleItem) {
+          await session.abortTransaction();
+          return response.error(res, `Mahsulot topilmadi: ${productName}`);
+        }
+
+        // Oldin yuborilganlarni hisoblash
+        const alreadyDelivered = targetSale.deliveredItems
+          .filter((di) => di.productId.toString() === productId.toString())
+          .reduce((sum, di) => sum + di.deliveredQuantity, 0);
+
+        const remaining = saleItem.quantity - alreadyDelivered;
+
+        if (remaining <= 0) {
           await session.abortTransaction();
           return response.error(
             res,
-            `Mahsulot yetarli emas: ${product.productName}`
+            `${saleItem.productName} mahsulotidan barcha ${saleItem.quantity} ta yuborilgan`
           );
         }
 
-        product.quantity -= quantity;
-        await product.save({ session, validateModifiedOnly: true });
-
-        const saleItem = sale.items.find(
-          (i) =>
-            i.productId &&
-            productId &&
-            i.productId.toString() === productId.toString()
-        );
-
-        if (!saleItem) {
+        if (quantity > remaining) {
           await session.abortTransaction();
           return response.error(
             res,
-            `Sotuvda mahsulot topilmadi: ${productId}`
+            `${saleItem.productName} uchun maksimal ${remaining} dona yuborish mumkin`
           );
         }
 
-        if (saleItem.deliveredQuantity + quantity > saleItem.quantity) {
-          await session.abortTransaction();
-          return response.error(
-            res,
-            `Yuborilgan mahsulot ${saleItem.productName} uchun buyurtma miqdoridan oshib ketdi`
-          );
+        // 🔹 Omborni kamaytirish
+        let product = await Material.findById(productId).session(session);
+        if (product) {
+          if (product.quantity < quantity) {
+            await session.abortTransaction();
+            return response.error(res, `Material yetarli emas: ${product.name}`);
+          }
+          product.quantity -= quantity;
+          await product.save({ session, validateModifiedOnly: true });
+        } else {
+          product = await FinishedProduct.findById(productId).session(session);
+          if (!product) {
+            await session.abortTransaction();
+            return response.error(res, `Mahsulot topilmadi: ${productId}`);
+          }
+          if (product.quantity < quantity) {
+            await session.abortTransaction();
+            return response.error(res, `Mahsulot yetarli emas: ${product.productName}`);
+          }
+          product.quantity -= quantity;
+          await product.save({ session, validateModifiedOnly: true });
         }
 
-        saleItem.deliveredQuantity += quantity;
-        saleItem.updatedAt = new Date();
-
-        sale.deliveredItems.push({
+        // 🔹 deliveredItems ga yozish
+        targetSale.deliveredItems.push({
           productId,
-          productName: saleItem.productName,
+          productName,
           deliveredQuantity: quantity,
           totalAmount: quantity * saleItem.pricePerUnit,
           transport,
@@ -256,88 +302,19 @@ class SaleController {
           deliveredGroups,
         });
 
-        if (product) {
-          let priceInfo = await ProductPriceInfo.findOne({
-            category: { $regex: `^${product.category}$`, $options: "i" },
-          });
-
-          if (priceInfo) {
-            loadAmount += priceInfo.loadingCost * item.quantity;
-          }
-        }
+        await targetSale.save({ session });
       }
 
-      await sale.save({ session });
-      // -------------------------------------------
-      // find  todays attendance
-      const now = new Date();
-      const hour = now.getHours();
-      const startOfDay = new Date(now);
-      startOfDay.setHours(0, 0, 0, 0);
+      // 5️⃣ Customer balansiga umumiy summani qo‘shish
+      customer.balans += total;
+      await customer.save({ session, validateModifiedOnly: true });
 
-      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
-
-      const baseAttendanceQuery = {
-        date: { $gte: startOfDay, $lte: endOfDay },
-        percentage: hour >= 12 ? { $gt: 0.5 } : { $gt: 0 }, // 12:00 dan keyin faqat 0.5+
-      };
-
-      let totalAttendances = await Attendance.find({
-        ...baseAttendanceQuery,
-        unit: { $in: deliveredGroups },
-      }).session(session);
-
-      let salaryPerWorker = loadAmount / totalAttendances.length;
-
-      for (const dept of deliveredGroups) {
-        let salaryRecord = await SalaryRecord.findOne({
-          date: { $gte: startOfDay, $lte: endOfDay },
-          department: dept,
-        }).session(session);
-
-        const attendances = totalAttendances.filter((att) => att.unit === dept);
-
-        if (!salaryRecord) {
-          if (attendances.length === 0) continue; // Ishchilar yo‘q bo‘lsa, o‘tkazib yuboramiz
-
-          const workers = attendances.map((att) => ({
-            employee: att.employee,
-            percentage: att.percentage,
-            amount: salaryPerWorker,
-          }));
-
-          salaryRecord = new SalaryRecord({
-            date: new Date(),
-            department: dept,
-            producedCount: 0,
-            loadedCount: 0, // kerak bo‘lsa, loadedCount hisoblang
-            totalSum: salaryPerWorker * attendances.length,
-            workers,
-          });
-
-          await salaryRecord.save({ session });
-        } else {
-          // Faqat bugungi davomatdagi ishchilarga ish haqini qo‘shamiz
-          const empSet = new Set(
-            attendances.map((att) => att.employee.toString())
-          );
-
-          salaryRecord.workers.forEach((worker) => {
-            if (empSet.has(worker.employee.toString())) {
-              worker.amount = (worker.amount || 0) + salaryPerWorker;
-            }
-          });
-
-          salaryRecord.totalSum += salaryPerWorker * attendances.length;
-
-          await salaryRecord.save({ session, validateModifiedOnly: true });
-        }
-      }
-
-      // -------------------------------------------
 
       await session.commitTransaction();
-      return response.success(res, "Mahsulotlar yetkazib berildi!");
+      return response.success(res, "Mahsulotlar muvaffaqiyatli yetkazildi!", {
+        customer,
+        sales,
+      });
     } catch (error) {
       await session.abortTransaction();
       return response.serverError(res, "Xatolik yuz berdi", error.message);
@@ -561,21 +538,18 @@ class SaleController {
   }
 
   // Delete sale
-
   async deleteSale(req, res) {
     const session = await mongoose.startSession();
-    session.startTransaction();
     try {
+      session.startTransaction();
+
       const sale = await Salecart.findById(req.params.id).session(session);
       if (!sale) {
+        await session.abortTransaction();
         return response.notFound(res, "Sotuv topilmadi!");
       }
 
-      // Check if any items have been delivered
-      const hasDeliveredItems = sale.items.some(
-        (item) => item.deliveredQuantity > 0
-      );
-      if (hasDeliveredItems) {
+      if (sale.deliveredItems?.length > 0) {
         await session.abortTransaction();
         return response.error(
           res,
@@ -583,69 +557,7 @@ class SaleController {
         );
       }
 
-      // Calculate total sale amount
-      const totalSaleAmount = sale.items.reduce(
-        (sum, item) => sum + item.discountedPrice * item.quantity,
-        0
-      );
-
-      // Get current month for plan based on sale's creation date
-      const currentDate = new Date(sale.createdAt);
-      const month = `${currentDate.getFullYear()}.${String(
-        currentDate.getMonth() + 1
-      ).padStart(2, "0")}`;
-
-      // Find plan for current month
-      const plan = await Plan.findOne({
-        employeeId: sale.salerId,
-        month,
-      }).session(session);
-
-      if (!plan) {
-        await session.abortTransaction();
-        return response.notFound(
-          res,
-          `Sotuvchi uchun ${month} oyida plan topilmadi`
-        );
-      }
-
-      // Remove sale from plan and update achievedAmount
-      plan.sales = plan.sales.filter(
-        (saleId) => saleId.toString() !== sale._id.toString()
-      );
-      plan.achievedAmount = Math.max(0, plan.achievedAmount - totalSaleAmount);
-      plan.progress =
-        plan.targetAmount > 0
-          ? Math.min((plan.achievedAmount / plan.targetAmount) * 100, 100)
-          : 0;
-      await plan.save({ session });
-
-      // Restore product quantities to warehouse (only for non-delivered items)
-      for (const item of sale.items) {
-        const product = await FinishedProduct.findById(item._id).session(
-          session
-        );
-        if (product) {
-          product.quantity += item.quantity;
-          await product.save({ session });
-        }
-      }
-
-      // Update balance if there was a payment
-      if (sale.payment.paidAmount > 0) {
-        const balanceField =
-          sale.payment.paymentType === "naqt" ? "naqt" : "bank";
-        await Balance.updateBalance(
-          balanceField,
-          "chiqim",
-          sale.payment.paidAmount,
-          { session }
-        );
-      }
-
-      // Delete sale and related expenses
-      await Salecart.deleteOne({ _id: req.params.id }).session(session);
-      await Expense.deleteMany({ relatedId: req.params.id }).session(session);
+      await Salecart.findByIdAndDelete(req.params.id).session(session);
 
       await session.commitTransaction();
       return response.success(res, "Sotuv muvaffaqiyatli o‘chirildi!");
@@ -661,120 +573,7 @@ class SaleController {
     }
   }
 
-  // // Process debt payment
-  // async payDebt(req, res) {
-  //   const session = await mongoose.startSession();
-  //   session.startTransaction();
 
-  //   try {
-  //     const { amount, description, paymentType } = req.body;
-
-  //     // Validate input
-  //     if (amount <= 0) {
-  //       throw new Error("To‘lov summasi noto‘g‘ri kiritildi!");
-  //     }
-  //     if (!["naqt", "bank"].includes(paymentType)) {
-  //       throw new Error("To‘lov turi noto‘g‘ri kiritildi!");
-  //     }
-
-  //     // Fetch sale with session
-  //     const sale = await Salecart.findById(req.params.id).session(session);
-  //     if (!sale) {
-  //       throw new Error("Sotuv topilmadi!");
-  //     }
-
-  //     // Check if payment exceeds total amount
-  //     const newPaidAmount = sale.payment.paidAmount + amount;
-  //     if (newPaidAmount > sale.payment.totalAmount) {
-  //       throw new Error("To‘lov summasi yakuniy summadan oshib ketdi!");
-  //     }
-
-  //     // Get month for the plan
-  //     const currentDate = new Date(sale.createdAt);
-  //     const month = `${currentDate.getFullYear()}.${String(
-  //       currentDate.getMonth() + 1
-  //     ).padStart(2, "0")}`;
-
-  //     // Find plan for the sale's month
-  //     const plan = await Plan.findOne({
-  //       employeeId: sale.salerId,
-  //       month,
-  //     }).session(session);
-  //     if (!plan) {
-  //       throw new Error(`Sotuvchi uchun ${month} oyida plan topilmadi`);
-  //     }
-
-  //     // Update balance
-  //     await Balance.updateBalance(paymentType, "kirim", amount, session);
-
-  //     // Update sale payment details
-  //     const updatedSale = await Salecart.findByIdAndUpdate(
-  //       req.params.id,
-  //       {
-  //         $set: {
-  //           "payment.paidAmount": newPaidAmount,
-  //           "payment.debt": sale.payment.totalAmount - newPaidAmount,
-  //           "payment.status":
-  //             newPaidAmount >= sale.payment.totalAmount ? "paid" : "partial",
-  //         },
-  //         $push: {
-  //           "payment.paymentHistory": {
-  //             amount,
-  //             date: new Date(),
-  //             description,
-  //             paidBy: sale.salesperson,
-  //             paymentType,
-  //           },
-  //         },
-  //       },
-  //       { new: true, runValidators: true, session }
-  //     );
-
-  //     // Update plan
-  //     plan.achievedAmount += amount;
-  //     plan.progress = Math.min(
-  //       (plan.achievedAmount / plan.targetAmount) * 100,
-  //       100
-  //     );
-  //     await plan.save({ session });
-
-  //     // Create expense record
-  //     const expense = new Expense({
-  //       relatedId: sale._id.toString(),
-  //       type: "kirim",
-  //       paymentMethod: paymentType,
-  //       category: "Mijoz tulovi",
-  //       amount,
-  //       description,
-  //       date: new Date(),
-  //     });
-  //     await expense.save({ session });
-
-  //     // Commit transaction
-  //     await session.commitTransaction();
-
-  //     // Populate and return response
-  //     const populatedSale = await Salecart.findById(updatedSale._id)
-  //       .populate("customerId", "name type phone companyAddress")
-  //       .populate("salerId", "firstName lastName")
-  //       .lean();
-
-  //     return response.success(
-  //       res,
-  //       "Qarz to‘lovi muvaffaqiyatli!",
-  //       populatedSale
-  //     );
-  //   } catch (error) {
-  //     await session.abortTransaction();
-  //     return response.serverError(
-  //       res,
-  //       "Qarz to‘lovida xatolik!",
-  //       error.message
-  //     );
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // }
 
   // mijoz qarzini to‘lash
   async payDebt(req, res) {
@@ -793,7 +592,7 @@ class SaleController {
         return response.notFound(res, "Mijoz topilmadi");
       }
 
-      let remaining = amount + customer.balans;
+      let remaining = amount; // ❌ oldin +balans qo‘shilgan edi, endi to‘g‘riladik
 
       // qarzlari bor savdolarni eng eski tarixdan olish
       const sales = await Salecart.find({
@@ -828,9 +627,9 @@ class SaleController {
 
         await sale.save({ session });
 
-        // Create expense record for this sale
+        // Har bir yopilgan qarz uchun expense yozamiz
         const expense = new Expense({
-          relatedId: sale._id.toString(),
+          relatedId: customerId,
           type: "kirim",
           paymentMethod: paymentType || "naqt",
           category: "Mijoz tulovi",
@@ -841,11 +640,11 @@ class SaleController {
         await expense.save({ session });
       }
 
-      // Update balance
+      // umumiy kassaga yozish
       await Balance.updateBalance(paymentType || "naqt", "kirim", amount, session);
 
-      // qolgan pulni balansga yozib qo‘yamiz
-      customer.balans = remaining;
+      // Agar qarzlar yopilib bo‘lsa va ortiqcha pul qolsa → balansga yozamiz
+      customer.balans -= amount;
       await customer.save({ session });
 
       await session.commitTransaction();
@@ -860,7 +659,8 @@ class SaleController {
       console.error(error);
       return response.serverError(res, "Xatolik yuz berdi", { error: error.message });
     }
-  };
+  }
+
 
   //get customers all
   async getCompanys(req, res) {
@@ -1001,10 +801,45 @@ class SaleController {
       // Har bir customer uchun sales tarixini olish
       const result = await Promise.all(
         customers.map(async (customer) => {
-          // Shu customerga tegishli barcha sales
           const sales = await Salecart.find({ customerId: customer._id })
             .populate("customerId", "name type phone company balans")
             .lean();
+
+          // Shu customerga tegishli barcha to‘lovlar
+          const expenses = await Expense.find({ relatedId: customer._id }).lean();
+
+          // 🔥 Umuman yuborilmagan yoki qisman yuborilgan mahsulotlarni hisoblash
+          let totalUndelivered = 0;
+          const groupedDeliveredItems = {};
+          sales.forEach((sale) => {
+            sale.items.forEach((item) => {
+              // Shu mahsulotdan qancha yetkazilganligini topamiz
+              const delivered = sale.deliveredItems
+                .filter((d) => String(d.productId) === String(item.productId))
+                .reduce((sum, d) => sum + (d.deliveredQuantity || 0), 0);
+
+              const remaining = item.quantity - delivered;
+              if (remaining > 0) {
+                totalUndelivered += remaining; // qolgan mahsulotlarni qo‘shamiz
+              }
+            });
+
+            // 🔥 deliveryDate bo'yicha guruhlash
+            sale.deliveredItems.forEach((deliveredItem) => {
+              console.log(deliveredItem);
+              // deliveryDate ni YYYY-MM-DD formatiga aylantirish
+              const dateKey = new Date(deliveredItem.deliveryDate)
+                .toISOString()
+                .slice(0, 13); // sana va soat (2025-08-28T06)
+
+              if (!groupedDeliveredItems[dateKey]) {
+                groupedDeliveredItems[dateKey] = [];
+              }
+              groupedDeliveredItems[dateKey].push(deliveredItem);
+            });
+          });
+
+
 
           // Balansni tekshirish va status berish
           let balansStatus = "0";
@@ -1016,14 +851,45 @@ class SaleController {
             balansStatus = "Mavjud emas";
           }
 
-          // Har bir customer uchun ma'lumot
+          // Savdo va To‘lovlarni bitta massivga qo‘shamiz
+          const history = [
+            ...sales.map((s) => ({
+              ...s,
+              _type: "sale",
+              date: s.createdAt,
+            })),
+          ].sort((a, b) => new Date(b.date) - new Date(a.date)); // eng oxirgi savdo oldinda
+
+          const Expenses = [
+            ...expenses.map((e) => ({
+              ...e,
+              date: e.date,
+            })),
+          ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+          // ❗ Har bir customer uchun eng oxirgi savdo sanasini olish
+          const lastSaleDate = sales.length
+            ? new Date(Math.max(...sales.map((s) => new Date(s.createdAt))))
+            : null;
+
           return {
             ...customer,
             balansStatus,
-            history: sales, // barcha buyurtmalar
+            history: sales,
+            Expenses,
+            totalUndelivered,
+            lastSaleDate, // 🔥 bu bilan sort qilamiz
+            groupedDeliveredItems, // 🔥 Guruhlangan deliveredItems (sana va soat)
           };
         })
       );
+
+      // ❗ Customerslarni oxirgi savdo sanasiga qarab sort qilish (eng yangisi oldinda)
+      result.sort((a, b) => {
+        if (!a.lastSaleDate) return 1; // agar savdosi bo‘lmasa pastga tushadi
+        if (!b.lastSaleDate) return -1;
+        return new Date(b.lastSaleDate) - new Date(a.lastSaleDate);
+      });
 
       // Yakuniy data
       return response.success(
@@ -1034,6 +900,7 @@ class SaleController {
     } catch (err) {
       return response.serverError(res, "Server xatosi", err.message);
     }
+
   }
   // Process product returns
   async returnItems(req, res) {
@@ -1188,7 +1055,6 @@ class SaleController {
   }
 
   // Get transport records
-  // Transport yozuvlarini olish
   async getTransport(req, res) {
     try {
       const { _id, amount } = req.query;
