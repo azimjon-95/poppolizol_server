@@ -129,8 +129,7 @@ class ProductionSystem {
       }
 
       const additional = totalAmount || 0;
-      const additionalAmount =
-        (additional * additionExpen.additionalExpenses || 0) / 100;
+      const additionalAmount = (additional * additionExpen.additionalExpenses || 0) / 100;
 
       // Fetch factory
       const [factory] = await Factory.find().session(session);

@@ -78,9 +78,7 @@ class SaleController {
       }
 
       const currentDate = new Date();
-      const month = `${currentDate.getFullYear()}.${String(
-        currentDate.getMonth() + 1
-      ).padStart(2, "0")}`;
+      const month = `${currentDate.getFullYear()}.${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
 
       const plan = await Plan.findOne({
         employeeId: salerId,
@@ -96,30 +94,86 @@ class SaleController {
       }
 
       for (const item of items) {
-        let product;
-        product = await Material.findById(item._id).session(session);
+        let { productId, productName, quantity } = item;
+        let remainingToDeliver = quantity;
 
-        if (product) {
-          // Agar Material bo'lsa, productionCost shart emas → default 0 beramiz
-          item.productionCost = 0;
-        } else {
-          product = await FinishedProduct.findById(item._id).session(session);
+        // Shu mahsulot bor bo'lgan barcha sotuvlarni topamiz
+        const relatedSales = sales.filter(sale =>
+          sale.items.some(i => i.productId.toString() === productId.toString())
+        );
 
-          if (!product) {
-            await session.abortTransaction();
-            return response.notFound(
-              res,
-              `Maxsulot topilmadi: ${item.productName || item.name}`
-            );
-          }
-
-          // Agar FinishedProduct bo‘lsa → productdan olish
-          item.productionCost = product.productionCost;
+        if (relatedSales.length === 0) {
+          await session.abortTransaction();
+          return response.error(res, `Mahsulot topilmadi: ${productName}`);
         }
 
-        // Assign the found product's ID to item.productId
-        item.productId = item._id;
+        // 🔹 Umumiy yuborilmagan miqdorni hisoblash
+        let totalRemaining = 0;
+        for (const sale of relatedSales) {
+          const saleItem = sale.items.find(
+            i => i.productId.toString() === productId.toString()
+          );
+          const alreadyDelivered = sale.deliveredItems
+            .filter(di => di.productId.toString() === productId.toString())
+            .reduce((sum, di) => sum + di.deliveredQuantity, 0);
+
+          totalRemaining += (saleItem.quantity - alreadyDelivered);
+        }
+
+        if (quantity > totalRemaining) {
+          await session.abortTransaction();
+          return response.error(
+            res,
+            `${productName} uchun maksimal ${totalRemaining} dona yuborish mumkin`
+          );
+        }
+
+        // 🔹 Endi optimal taqsimlaymiz
+        for (const sale of relatedSales) {
+          if (remainingToDeliver <= 0) break;
+
+          const saleItem = sale.items.find(
+            i => i.productId.toString() === productId.toString()
+          );
+          const alreadyDelivered = sale.deliveredItems
+            .filter(di => di.productId.toString() === productId.toString())
+            .reduce((sum, di) => sum + di.deliveredQuantity, 0);
+
+          const remaining = saleItem.quantity - alreadyDelivered;
+          if (remaining <= 0) continue;
+
+          const deliverNow = Math.min(remaining, remainingToDeliver);
+
+          // Ombordan kamaytirish
+          let product = await Material.findById(productId).session(session);
+          if (!product) {
+            product = await FinishedProduct.findById(productId).session(session);
+          }
+          if (!product || product.quantity < deliverNow) {
+            await session.abortTransaction();
+            return response.error(res, `Mahsulot yetarli emas: ${productName}`);
+          }
+          product.quantity -= deliverNow;
+          await product.save({ session, validateModifiedOnly: true });
+
+          // deliveredItems ga yozish
+          sale.deliveredItems.push({
+            productId,
+            productName,
+            deliveredQuantity: deliverNow,
+            totalAmount: deliverNow * saleItem.pricePerUnit,
+            transport,
+            transportCost,
+            deliveryDate: new Date(),
+            deliveredGroups,
+          });
+
+          await sale.save({ session });
+
+          remainingToDeliver -= deliverNow;
+        }
       }
+
 
       const newSale = new Salecart({
         customerId: customer._id,
@@ -183,7 +237,6 @@ class SaleController {
     try {
       const { saleId, items, transport, transportCost, deliveredGroups } = req.body;
 
-
       // Har bir item uchun discountedPrice * quantity
       const total = items.reduce((sum, item) => {
         return sum + (item.discountedPrice * item.quantity);
@@ -220,89 +273,76 @@ class SaleController {
 
       // 4️⃣ Itemlar bo‘yicha yurish
       for (const item of items) {
-        const { productId, productName, quantity } = item;
+        let quantityToDeliver = item.quantity;
+        const { productId, productName } = item;
 
-        // Sotuv tarixlaridan topish
-        let targetSale = null;
-        let saleItem = null;
+        // 1) Shu mahsulot qatnashgan barcha buyurtmalarni yig‘ib olamiz
+        const candidateSales = sales.filter(sale =>
+          sale.items.some(i => i.productId.toString() === productId.toString())
+        );
 
-        for (const sale of sales) {
-          const found = sale.items.find(
-            (i) =>
-              i.productId.toString() === productId.toString() &&
-              i.productName === productName
-          );
-          if (found) {
-            targetSale = sale;
-            saleItem = found;
-            break;
-          }
-        }
-
-        if (!targetSale || !saleItem) {
+        if (candidateSales.length === 0) {
           await session.abortTransaction();
           return response.error(res, `Mahsulot topilmadi: ${productName}`);
         }
 
-        // Oldin yuborilganlarni hisoblash
-        const alreadyDelivered = targetSale.deliveredItems
-          .filter((di) => di.productId.toString() === productId.toString())
-          .reduce((sum, di) => sum + di.deliveredQuantity, 0);
+        // 2) Har bir buyurtma bo‘yicha ketma-ket yuborish
+        for (const sale of candidateSales) {
+          const saleItem = sale.items.find(
+            i => i.productId.toString() === productId.toString()
+          );
 
-        const remaining = saleItem.quantity - alreadyDelivered;
+          // Oldin yuborilgan miqdorni hisoblash
+          const alreadyDelivered = sale.deliveredItems
+            .filter(di => di.productId.toString() === productId.toString())
+            .reduce((sum, di) => sum + di.deliveredQuantity, 0);
 
-        if (remaining <= 0) {
+          const remaining = saleItem.quantity - alreadyDelivered;
+          if (remaining <= 0) continue; // Bu buyurtma to‘liq yuborilgan
+
+          // Nechta yuboramiz (kamroq miqdorni tanlaymiz)
+          const deliverNow = Math.min(quantityToDeliver, remaining);
+
+          if (deliverNow > 0) {
+            // 🔹 Omborni kamaytirish
+            let product = await Material.findById(productId).session(session);
+            if (!product) {
+              product = await FinishedProduct.findById(productId).session(session);
+            }
+            if (!product || product.quantity < deliverNow) {
+              await session.abortTransaction();
+              return response.error(res, `Mahsulot yetarli emas: ${productName}`);
+            }
+            product.quantity -= deliverNow;
+            await product.save({ session, validateModifiedOnly: true });
+
+            // 🔹 deliveredItems ga yozish
+            sale.deliveredItems.push({
+              productId,
+              productName,
+              deliveredQuantity: deliverNow,
+              totalAmount: deliverNow * saleItem.pricePerUnit,
+              transport,
+              transportCost,
+              deliveryDate: new Date(),
+              deliveredGroups,
+            });
+            await sale.save({ session });
+
+            // Qancha qolganini kamaytiramiz
+            quantityToDeliver -= deliverNow;
+            if (quantityToDeliver === 0) break; // Hamma yuborildi
+          }
+        }
+
+        // Agar hali ham yuborilmagan qismi qolsa => xato
+        if (quantityToDeliver > 0) {
           await session.abortTransaction();
           return response.error(
             res,
-            `${saleItem.productName} mahsulotidan barcha ${saleItem.quantity} ta yuborilgan`
+            `${productName} mahsulotidan ortiqcha yuborishga urinildi`
           );
         }
-
-        if (quantity > remaining) {
-          await session.abortTransaction();
-          return response.error(
-            res,
-            `${saleItem.productName} uchun maksimal ${remaining} dona yuborish mumkin`
-          );
-        }
-
-        // 🔹 Omborni kamaytirish
-        let product = await Material.findById(productId).session(session);
-        if (product) {
-          if (product.quantity < quantity) {
-            await session.abortTransaction();
-            return response.error(res, `Material yetarli emas: ${product.name}`);
-          }
-          product.quantity -= quantity;
-          await product.save({ session, validateModifiedOnly: true });
-        } else {
-          product = await FinishedProduct.findById(productId).session(session);
-          if (!product) {
-            await session.abortTransaction();
-            return response.error(res, `Mahsulot topilmadi: ${productId}`);
-          }
-          if (product.quantity < quantity) {
-            await session.abortTransaction();
-            return response.error(res, `Mahsulot yetarli emas: ${product.productName}`);
-          }
-          product.quantity -= quantity;
-          await product.save({ session, validateModifiedOnly: true });
-        }
-
-        // 🔹 deliveredItems ga yozish
-        targetSale.deliveredItems.push({
-          productId,
-          productName,
-          deliveredQuantity: quantity,
-          totalAmount: quantity * saleItem.pricePerUnit,
-          transport,
-          transportCost,
-          deliveryDate: new Date(),
-          deliveredGroups,
-        });
-
-        await targetSale.save({ session });
       }
 
       // 5️⃣ Customer balansiga umumiy summani qo‘shish
@@ -826,7 +866,6 @@ class SaleController {
 
             // 🔥 deliveryDate bo'yicha guruhlash
             sale.deliveredItems.forEach((deliveredItem) => {
-              console.log(deliveredItem);
               // deliveryDate ni YYYY-MM-DD formatiga aylantirish
               const dateKey = new Date(deliveredItem.deliveryDate)
                 .toISOString()
