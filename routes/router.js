@@ -17,6 +17,8 @@ const SaleController = require("../controller/saleCartController"); // Path to y
 const salaryController = require("../controller/calculateSalary/salaryController");
 const AdditionExpenController = require("../controller/additionExpen.controller");
 const FirmService = require("../controller/firmaCtrl");
+const customerController = require("../controller/customerCtrl");
+
 // Validations
 const adminValidation = require("../validation/adminValidation");
 const materialValidation = require("../validation/MaterialValidation");
@@ -255,5 +257,17 @@ router.get(
   "/praymer/monthly/:startDate/:endDate",
   PraymerController.getOneMonthData
 ); // Example: /monthly?month=8&year=2025
+
+
+
+
+/**
+ * ============================
+ * Customer
+ * ============================
+ */
+router.get("/customer/:id/stats", customerController.getCustomerStats);
+router.put("/customer/:id", customerController.updateCustomer);
+
 
 module.exports = router;
