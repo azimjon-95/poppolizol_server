@@ -114,22 +114,12 @@ class ProductionSystem {
           filteredExpenses.push(exp);
         }
       }
-
       const totalAmount = filteredExpenses.reduce(
         (sum, item) => sum + item.amount,
         0
       );
 
-      const [additionExpen] = await AdditionExpen.find().session(session);
-      if (!additionExpen) {
-        return response.notFound(
-          res,
-          "Tannarx va boshqa xarajatlari topilmadi!"
-        );
-      }
-
-      const additional = totalAmount || 0;
-      const additionalAmount = (additional * additionExpen.additionalExpenses || 0) / 100;
+      const additionalAmount = totalAmount || 0;
 
       // Fetch factory
       const [factory] = await Factory.find().session(session);
