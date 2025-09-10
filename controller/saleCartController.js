@@ -483,7 +483,7 @@ class SaleController {
       // 5️⃣ Customer balansiga umumiy summani qo‘shish
       customer.balans += total;
       await customer.save({ session, validateModifiedOnly: true });
-      
+
       await calculateLoadedPrices(new Date(), session);
 
       await session.commitTransaction();
@@ -801,18 +801,18 @@ class SaleController {
 
         await sale.save({ session });
 
-        // Har bir yopilgan qarz uchun expense yozamiz
-        const expense = new Expense({
-          relatedId: customerId,
-          type: "kirim",
-          paymentMethod: paymentType || "naqt",
-          category: "Mijoz tulovi",
-          amount: payNow,
-          description: description || "Mijoz qarz to'lovi",
-          date: new Date(),
-        });
-        await expense.save({ session });
       }
+      // Har bir yopilgan qarz uchun expense yozamiz
+      const expense = new Expense({
+        relatedId: customerId,
+        type: "kirim",
+        paymentMethod: paymentType || "naqt",
+        category: "Mijoz tulovi",
+        amount,
+        description: description || "Mijoz qarz to'lovi",
+        date: new Date(),
+      });
+      await expense.save({ session });
 
       // umumiy kassaga yozish
       await Balance.updateBalance(
