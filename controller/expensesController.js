@@ -84,15 +84,30 @@ class ExpenseController {
       };
 
       const productItems = { polizol: [], ruberoid: [] };
-      productionHistory.forEach((item) => {
-        const name = item.productName.toLowerCase();
-        const product = name.startsWith('palizol') || name.startsWith('polizol') ? products.polizol : name.includes('ruberoid') ? products.ruberoid : null;
+
+      // Barcha productlarni yig'ib olish
+      const allProducts = productionHistory.flatMap(item => item.products);
+
+      // Endi hisoblash
+      allProducts.forEach((prod) => {
+        const name = prod.productName.toLowerCase();
+
+        const product =
+          name.startsWith("palizol") || name.startsWith("polizol")
+            ? products.polizol
+            : name.includes("ruberoid")
+              ? products.ruberoid
+              : null;
+
         if (product) {
-          product.quantity += item.quantityProduced || 0;
-          product.gas += item.gasAmount || 0;
-          product.electricity += item.electricity || 0;
-          product.sellingPrice += item.salePrice || 0;
-          productItems[product === products.polizol ? 'polizol' : 'ruberoid'].push(item);
+          product.quantity += prod.quantityProduced || 0;
+          product.gas += prod.gasAmount || 0;
+          product.electricity += prod.electricity || 0;
+          product.sellingPrice += prod.salePrice || 0;
+
+          productItems[product === products.polizol ? "polizol" : "ruberoid"].push(
+            prod
+          );
         }
       });
 
