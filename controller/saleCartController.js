@@ -158,6 +158,202 @@ class SaleController {
     }
   }
 
+  // async deliverProduct(req, res) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     const { saleId, items, transport, transportCost, deliveredGroups } =
+  //       req.body;
+  //     // Har bir item uchun discountedPrice * quantity
+  //     const total = items.reduce((sum, item) => {
+  //       return sum + item.discountedPrice * item.quantity;
+  //     }, 0);
+
+  //     if (!saleId || !items || !transport || transportCost === undefined) {
+  //       await session.abortTransaction();
+  //       return response.error(res, "Barcha maydonlar to'ldirilishi shart");
+  //     }
+
+  //     // 1️⃣ Customer olish
+  //     const customer = await Customer.findById(saleId).session(session);
+  //     if (!customer) {
+  //       await session.abortTransaction();
+  //       return response.notFound(res, "Mijoz topilmadi");
+  //     }
+
+  //     // 2️⃣ Mijozning sotuv tarixlari
+  //     const sales = await Salecart.find({ customerId: customer._id }).session(
+  //       session
+  //     );
+  //     if (!sales || sales.length === 0) {
+  //       await session.abortTransaction();
+  //       return response.notFound(res, "Mijozning sotuv tarixi topilmadi");
+  //     }
+
+  //     // 3️⃣ Transport yozuvi
+  //     let transportRecord = await Transport.findOne({ transport }).session(
+  //       session
+  //     );
+  //     if (!transportRecord) {
+  //       transportRecord = new Transport({ transport, balance: transportCost });
+  //     } else {
+  //       transportRecord.balance += transportCost;
+  //     }
+  //     await transportRecord.save({ session });
+
+  //     // 4️⃣ Itemlar bo‘yicha yurish
+  //     for (const item of items) {
+  //       let quantityToDeliver = item.quantity;
+  //       const { productId, productName } = item;
+
+  //       // 1) Shu mahsulot qatnashgan barcha buyurtmalarni yig‘ib olamiz
+  //       const candidateSales = sales.filter((sale) =>
+  //         sale.items.some(
+  //           (i) => i.productId.toString() === productId.toString()
+  //         )
+  //       );
+
+  //       if (candidateSales.length === 0) {
+  //         await session.abortTransaction();
+  //         return response.error(res, `Mahsulot topilmadi: ${productName}`);
+  //       }
+
+  //       // 2) Har bir buyurtma bo‘yicha ketma-ket yuborish
+  //       for (const sale of candidateSales) {
+  //         const saleItem = sale.items.find(
+  //           (i) => i.productId.toString() === productId.toString()
+  //         );
+
+  //         // Oldin yuborilgan miqdorni hisoblash
+  //         const alreadyDelivered = sale.deliveredItems
+  //           .filter((di) => di.productId.toString() === productId.toString())
+  //           .reduce((sum, di) => sum + di.deliveredQuantity, 0);
+
+  //         const remaining = saleItem.quantity - alreadyDelivered;
+  //         if (remaining <= 0) continue; // Bu buyurtma to‘liq yuborilgan
+
+  //         // Nechta yuboramiz (kamroq miqdorni tanlaymiz)
+  //         const deliverNow = Math.min(quantityToDeliver, remaining);
+
+  //         if (deliverNow > 0) {
+  //           // 🔹 Omborni kamaytirish
+  //           let product = await Material.findById(productId).session(session);
+  //           if (!product) {
+  //             product = await FinishedProduct.findById(productId).session(
+  //               session
+  //             );
+  //           }
+  //           if (!product || product.quantity < deliverNow) {
+  //             await session.abortTransaction();
+  //             return response.error(
+  //               res,
+  //               `Mahsulot yetarli emas: ${productName}`
+  //             );
+  //           }
+  //           product.quantity -= deliverNow;
+  //           await product.save({ session, validateModifiedOnly: true });
+
+  //           // 🔹 deliveredItems ga yozish
+  //           sale.deliveredItems.push({
+  //             productId,
+  //             productName,
+  //             deliveredQuantity: deliverNow,
+  //             totalAmount: deliverNow * saleItem.pricePerUnit,
+  //             transport,
+  //             transportCost,
+  //             deliveryDate: new Date(),
+  //             deliveredGroups,
+  //           });
+  //           await sale.save({ session });
+
+  //           // Qancha qolganini kamaytiramiz
+  //           quantityToDeliver -= deliverNow;
+  //           if (quantityToDeliver === 0) break; // Hamma yuborildi
+  //         }
+  //       }
+
+  //       // Agar hali ham yuborilmagan qismi qolsa => xato
+  //       if (quantityToDeliver > 0) {
+  //         await session.abortTransaction();
+  //         return response.error(
+  //           res,
+  //           `${productName} mahsulotidan ortiqcha yuborishga urinildi`
+  //         );
+  //       }
+
+  //       if (quantityToDeliver > remaining) {
+  //         await session.abortTransaction();
+  //         return response.error(
+  //           res,
+  //           `${saleItem.productName} uchun maksimal ${remaining} dona yuborish mumkin`
+  //         );
+  //       }
+
+  //       // 🔹 Omborni kamaytirish
+  //       let product = await Material.findById(productId).session(session);
+  //       if (product) {
+  //         if (product.quantity < quantity) {
+  //           await session.abortTransaction();
+  //           return response.error(
+  //             res,
+  //             `Material yetarli emas: ${product.name}`
+  //           );
+  //         }
+  //         product.quantity -= quantity;
+  //         await product.save({ session, validateModifiedOnly: true });
+  //       } else {
+  //         product = await FinishedProduct.findById(productId).session(session);
+  //         if (!product) {
+  //           await session.abortTransaction();
+  //           return response.error(res, `Mahsulot topilmadi: ${productId}`);
+  //         }
+  //         if (product.quantity < quantity) {
+  //           await session.abortTransaction();
+  //           return response.error(
+  //             res,
+  //             `Mahsulot yetarli emas: ${product.productName}`
+  //           );
+  //         }
+  //         product.quantity -= quantity;
+  //         await product.save({ session, validateModifiedOnly: true });
+  //       }
+
+  //       // 🔹 deliveredItems ga yozish
+  //       targetSale.deliveredItems.push({
+  //         productId,
+  //         productName,
+  //         deliveredQuantity: quantity,
+  //         totalAmount: quantity * saleItem.pricePerUnit,
+  //         transport,
+  //         transportCost,
+  //         deliveryDate: new Date(),
+  //         deliveredGroups,
+  //       });
+
+  //       await targetSale.save({ session });
+  //     }
+
+  //     // 5️⃣ Customer balansiga umumiy summani qo‘shish
+  //     customer.balans += total;
+  //     await customer.save({ session, validateModifiedOnly: true });
+
+  //     await calculateLoadedPrices(new Date(), session);
+
+  //     await session.commitTransaction();
+  //     return response.success(res, "Mahsulotlar muvaffaqiyatli yetkazildi!", {
+  //       customer,
+  //       sales,
+  //     });
+  //   } catch (error) {
+  //     console.log(error);
+  //     await session.abortTransaction();
+  //     return response.serverError(res, "Xatolik yuz berdi", error.message);
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
+
   async deliverProduct(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -165,6 +361,7 @@ class SaleController {
     try {
       const { saleId, items, transport, transportCost, deliveredGroups } =
         req.body;
+
       // Har bir item uchun discountedPrice * quantity
       const total = items.reduce((sum, item) => {
         return sum + item.discountedPrice * item.quantity;
@@ -281,63 +478,12 @@ class SaleController {
             `${productName} mahsulotidan ortiqcha yuborishga urinildi`
           );
         }
-
-        if (quantity > remaining) {
-          await session.abortTransaction();
-          return response.error(
-            res,
-            `${saleItem.productName} uchun maksimal ${remaining} dona yuborish mumkin`
-          );
-        }
-
-        // 🔹 Omborni kamaytirish
-        let product = await Material.findById(productId).session(session);
-        if (product) {
-          if (product.quantity < quantity) {
-            await session.abortTransaction();
-            return response.error(
-              res,
-              `Material yetarli emas: ${product.name}`
-            );
-          }
-          product.quantity -= quantity;
-          await product.save({ session, validateModifiedOnly: true });
-        } else {
-          product = await FinishedProduct.findById(productId).session(session);
-          if (!product) {
-            await session.abortTransaction();
-            return response.error(res, `Mahsulot topilmadi: ${productId}`);
-          }
-          if (product.quantity < quantity) {
-            await session.abortTransaction();
-            return response.error(
-              res,
-              `Mahsulot yetarli emas: ${product.productName}`
-            );
-          }
-          product.quantity -= quantity;
-          await product.save({ session, validateModifiedOnly: true });
-        }
-
-        // 🔹 deliveredItems ga yozish
-        targetSale.deliveredItems.push({
-          productId,
-          productName,
-          deliveredQuantity: quantity,
-          totalAmount: quantity * saleItem.pricePerUnit,
-          transport,
-          transportCost,
-          deliveryDate: new Date(),
-          deliveredGroups,
-        });
-
-        await targetSale.save({ session });
       }
 
       // 5️⃣ Customer balansiga umumiy summani qo‘shish
       customer.balans += total;
       await customer.save({ session, validateModifiedOnly: true });
-
+      
       await calculateLoadedPrices(new Date(), session);
 
       await session.commitTransaction();
