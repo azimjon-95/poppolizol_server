@@ -15,6 +15,10 @@ const WorkerShareSchema = new Schema({
     type: Number,
     required: true,
   },
+  amountOfLoaded: {
+    type: Number,
+    default: 0,
+  },
 });
 
 const SalaryRecordSchema = new Schema(
@@ -55,6 +59,7 @@ const SalaryRecordSchema = new Schema(
       default: 0,
     },
     workers: [WorkerShareSchema],
+    processedItems: [{ type: Schema.Types.ObjectId, ref: "Salecart" }],
     type: {
       type: String,
       enum: ["default", "cleaning"],

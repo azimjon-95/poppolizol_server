@@ -3,20 +3,6 @@ const Attendance = require("../model/attendanceModal");
 const Admins = require("../model/adminModel");
 const response = require("../utils/response");
 
-// const {
-//   recalculatePolizolSalaries,
-// } = require("../controller/calculateSalary/calculatePolizol");
-
-// const {
-//   reCalculateOkisleniya,
-// } = require("../controller/calculateSalary/calculateOchisleniya");
-
-// const {
-//   reCalculateRuberoidSalaries,
-// } = require("../controller/calculateSalary/calculateRubiroid");
-
-// const updateSalaryRecordForDate = require("../controller/calculateSalary/reCalculate");
-
 const calculateLoadedPrices = require("../controller/calculateSalary/calculateLoadedPrices");
 const reCalculateGlobalSalaries = require("../controller/calculateSalary/globalCalculate");
 
@@ -34,6 +20,8 @@ class AttendanceController {
         department: unit,
         cleaning,
       } = req.body;
+
+      console.log(unit);
 
       if (!unit) {
         await session.abortTransaction();
@@ -117,9 +105,6 @@ class AttendanceController {
           { session }
         );
         if (!cleaning) {
-          // await recalculatePolizolSalaries(date, session);
-          // await reCalculateOkisleniya(date, session);
-          // await reCalculateRuberoidSalaries(date, session);
           let unitForSalary = user.unit.includes("rubiroid")
             ? "ruberoid"
             : unit;
@@ -138,10 +123,6 @@ class AttendanceController {
           { upsert: true, new: true, session }
         );
         if (!cleaning) {
-          // await recalculatePolizolSalaries(date, session);
-          // await reCalculateOkisleniya(date, session);
-          // await reCalculateRuberoidSalaries(date, session);
-
           let unitForSalary = user.unit.includes("rubiroid")
             ? "ruberoid"
             : user.unit;
@@ -167,7 +148,10 @@ class AttendanceController {
                 date: new Date(date),
                 type: "cleaning",
                 amount: cleaning,
-                department: unit,
+                department: unit.toLowerCase().includes("okisleniya")
+                  ? "Okisleniya"
+                  : unit,
+                // department: unit,
                 totalSum: 120000 * percentage,
                 salaryPerPercent: 120000 * percentage,
                 workers: [
@@ -385,22 +369,11 @@ class AttendanceController {
 
       await Attendance.findByIdAndDelete(attendanceId).session(session);
 
-      // if (user.unit === "polizol") {
-      //   await recalculatePolizolSalaries(user?.date, session);
-      // }
-
-      // if (user.unit === "rubiroid") {
-      //   await recalculateRubiroidSalaries(user?.date, session);
-      // }
-
-      // if (user.unit === "Okisleniya") {
-      //   await recalculateOkisleniyaSalaries(user?.date, session);
-      // }
       let unitForSalary = user.unit.includes("rubiroid")
         ? "ruberoid"
         : user.unit;
       await reCalculateGlobalSalaries(unitForSalary, user?.date, session);
-      await calculateLoadedPrices(user.unit, user?.date, session);
+      await calculateLoadedPrices(user?.date, session);
 
       await session.commitTransaction();
       session.endSession();
@@ -408,7 +381,6 @@ class AttendanceController {
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      console.error("Delete attendance error:", error);
       return response.serverError(
         res,
         "Davomatni o'chirishda xatolik yuz berdi",

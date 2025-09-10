@@ -8,18 +8,6 @@ const ProductionHistory = require("../model/ProductionHistoryModel");
 const Inventory = require("../model/inventoryHistoryModel");
 const response = require("../utils/response");
 const mongoose = require("mongoose");
-const {
-  calculateOchisleniyaBN3,
-  CalculateBN5forSale,
-} = require("./calculateSalary/calculateOchisleniya");
-
-const {
-  calculatePolizolSalaries,
-} = require("./calculateSalary/calculatePolizol");
-
-const {
-  calculateRuberoidSalaries,
-} = require("./calculateSalary/calculateRubiroid");
 
 const reCalculateGlobalSalaries = require("./calculateSalary/globalCalculate");
 
@@ -326,23 +314,39 @@ class ProductionSystem {
           )[0];
         }
 
+        producedMessages.push(
+          `${prodData.productNorma.productName} dan ${prodData.quantity} : ""}`
+        );
+      }
+
+      // Record batch-level production history optimally
+      await ProductionHistory.create(
+        [
+          {
+            date: date,
+            products: productsForHistory, // Array of {productName, quantityProduced, salePrice, totalSaleValue}
+            materialsUsed: materialsUsed, // Array of {materialId, materialName, quantityUsed, unitPrice, totalCost}
+            materialStatistics: { totalMaterialCost }, // Or more stats if needed
+            gasConsumption: totalGasUsed,
+            gasCost: totalGasCost,
+            electricityConsumption: totalElectricityUsed,
+            electricityCost: totalElectricityCost,
+            otherExpenses: additionalAmount,
+            workerExpenses: totalWorkerCost + totalLoadingCost, // Combined worker and loading costs
+            totalBatchCost: totalCostSum,
+          },
+        ],
+        { session }
+      );
+
+      for (const prodData of productDataList) {
         // Handle special salary calculations
         const lowerProductName = prodData.productName.toLowerCase();
-        console.log("111", lowerProductName);
         let date = new Date();
         const startOfDay = new Date(date.setHours(0, 0, 0, 0));
         const endOfDay = new Date(date.setHours(23, 59, 59, 0));
 
         if (lowerProductName.includes("ruberoid")) {
-          console.log(">>", "ruberoid");
-
-          // await calculateRuberoidSalaries({
-          //   producedCount: prodData.quantity,
-          //   product_id: prodData.productNorma._id,
-          //   date,
-          //   session,
-          // });
-
           let exactSalaryRecord = await SalaryRecord.findOne({
             date: { $gte: startOfDay, $lte: endOfDay },
             department: "ruberoid",
@@ -365,7 +369,7 @@ class ProductionSystem {
           if (exactSalaryRecord) {
             exactSalaryRecord.producedCount += prodData.quantity;
             await exactSalaryRecord.save({ session });
-            await reCalculateGlobalSalaries("polizol", date, session);
+            await reCalculateGlobalSalaries("ruberoid", date, session);
           }
         }
 
@@ -373,13 +377,6 @@ class ProductionSystem {
           lowerProductName.includes("polizol") ||
           lowerProductName.includes("folygoizol")
         ) {
-          // await calculatePolizolSalaries({
-          //   producedCount: prodData.quantity,
-          //   loadedCount: 0,
-          //   session,
-          //   date,
-          // });
-
           let exactSalaryRecord = await SalaryRecord.findOne({
             date: { $gte: startOfDay, $lte: endOfDay },
             department: "polizol",
@@ -405,31 +402,7 @@ class ProductionSystem {
             await reCalculateGlobalSalaries("polizol", date, session);
           }
         }
-
-        producedMessages.push(
-          `${prodData.productNorma.productName} dan ${prodData.quantity} : ""}`
-        );
       }
-
-      // Record batch-level production history optimally
-      await ProductionHistory.create(
-        [
-          {
-            date: date,
-            products: productsForHistory, // Array of {productName, quantityProduced, salePrice, totalSaleValue}
-            materialsUsed: materialsUsed, // Array of {materialId, materialName, quantityUsed, unitPrice, totalCost}
-            materialStatistics: { totalMaterialCost }, // Or more stats if needed
-            gasConsumption: totalGasUsed,
-            gasCost: totalGasCost,
-            electricityConsumption: totalElectricityUsed,
-            electricityCost: totalElectricityCost,
-            otherExpenses: additionalAmount,
-            workerExpenses: totalWorkerCost + totalLoadingCost, // Combined worker and loading costs
-            totalBatchCost: totalCostSum,
-          },
-        ],
-        { session }
-      );
 
       await session.commitTransaction();
       return response.created(
@@ -514,7 +487,6 @@ class ProductionSystem {
       if (end < start) {
         return response.badRequest(res, "endDate cannot be before startDate");
       }
-      console.log(start, new Date(end.setHours(23, 59, 59, 999)));
       // Query ProductionHistory with date range filter
       const history = await ProductionHistory.find({
         createdAt: {
@@ -549,9 +521,6 @@ class ProductionSystem {
         bn3Amount,
         wasteAmount,
         gasAmount,
-        temperature,
-        electricEnergy,
-        boilingHours,
         electricity,
         extra,
         price,
@@ -656,7 +625,40 @@ class ProductionSystem {
       // Inventory'ga saqlash
       const [inventory] = await Inventory.create([inventoryData], { session });
 
-      await calculateOchisleniyaBN3(bn3Amount, finalBn5, date, session);
+      // await calculateOchisleniyaBN3(bn3Amount, finalBn5, date, session);
+
+      // Date range for SalaryRecord
+
+      const startOfDay = new Date(date).setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date).setHours(23, 59, 59, 999);
+
+      // Check for existing SalaryRecord
+      let exactSalaryRecord = await SalaryRecord.findOne({
+        date: { $gte: startOfDay, $lte: endOfDay },
+        department: "Okisleniya",
+      }).session(session);
+
+      if (!exactSalaryRecord) {
+        exactSalaryRecord = await SalaryRecord.create(
+          [
+            {
+              date: new Date(date),
+              department: "Okisleniya",
+              btm_3: +bn3Amount,
+              btm_5: +finalBn5,
+            },
+          ],
+          { session }
+        );
+        exactSalaryRecord = exactSalaryRecord[0];
+      } else {
+        exactSalaryRecord.btm_3 += +bn3Amount;
+        exactSalaryRecord.btm_5 += +finalBn5;
+        await exactSalaryRecord.save({ session });
+      }
+
+      // Recalculate salaries
+      await reCalculateGlobalSalaries("Okisleniya", startOfDay, session);
 
       await session.commitTransaction();
       isCommitted = true;
@@ -852,7 +854,36 @@ class ProductionSystem {
       const [inventory] = await Inventory.create([inventoryData], { session });
 
       let btm5Sale = bn5Amount + melAmount;
-      await CalculateBN5forSale(btm5Sale, date, session);
+      // await CalculateBN5forSale(btm5Sale, date, session);
+
+      const startOfDay = new Date(date).setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date).setHours(23, 59, 59, 999);
+
+      // Check for existing SalaryRecord
+      let exactSalaryRecord = await SalaryRecord.findOne({
+        date: { $gte: startOfDay, $lte: endOfDay },
+        department: "Okisleniya",
+      }).session(session);
+
+      if (!exactSalaryRecord) {
+        exactSalaryRecord = await SalaryRecord.create(
+          [
+            {
+              date: new Date(date),
+              department: "Okisleniya",
+              btm_5_sale: btm5Sale,
+            },
+          ],
+          { session }
+        );
+        exactSalaryRecord = exactSalaryRecord[0];
+      } else {
+        exactSalaryRecord.btm_5_sale += btm5Sale;
+        await exactSalaryRecord.save({ session });
+      }
+
+      // Recalculate salaries
+      await reCalculateGlobalSalaries("Okisleniya", startOfDay, session);
 
       // Yakunlash
       await session.commitTransaction();
@@ -938,14 +969,12 @@ class ProductionSystem {
     try {
       const { id } = req.params;
       const updatedData = req.body;
-      console.log(updatedData);
 
       const updatedProduct = await FinishedProduct.findByIdAndUpdate(
         id,
         updatedData,
         { new: true, runValidators: true }
       );
-      console.log(updatedProduct);
 
       if (!updatedProduct) {
         return response.notFound(res, "Mahsulot topilmadi");

@@ -92,8 +92,6 @@ class SalaryRecordController {
 
       return response.success(res, "Worker payments summary", result);
     } catch (error) {
-      console.log(error);
-
       return response.serverError(
         res,
         "Failed to retrieve salary records",
