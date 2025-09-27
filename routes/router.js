@@ -102,6 +102,7 @@ router.post("/production-process", productionSystem.productionProcess);
 router.post("/production/bn5", productionSystem.createBn5Production);
 router.post("/production/salesBN5", productionSystem.productionForSalesBN5);
 router.get("/inventory", productionSystem.getInventory);
+router.get("/top-products", productionSystem.getTopProductsByMonth);
 router.put("/finished-products/:id", productionSystem.updateFinished);
 router.delete("/finished-products/:id", productionSystem.deleteFinished);
 
