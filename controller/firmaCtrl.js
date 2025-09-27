@@ -144,6 +144,38 @@ class FirmService {
             return response.serverError(res, `Xatolik yuz berdi: ${error.message}`, null);
         }
     }
+
+    // ✅ Barcha firmalarni olish
+    async getAll() {
+        try {
+            const firms = await Firm.find().sort({ createdAt: -1 });
+            return response.success("Barcha firmalar", firms);
+        } catch (error) {
+            return response.error("Firmalarni olishda xatolik", error.message);
+        }
+    }
+
+    // ✅ Firmani yangilash
+    async update(id, data) {
+        try {
+            const firm = await Firm.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+            if (!firm) return response.error("Firma topilmadi");
+            return response.success("Firma muvaffaqiyatli yangilandi", firm);
+        } catch (error) {
+            return response.error("Firma yangilashda xatolik", error.message);
+        }
+    }
+
+    // ✅ Firmani o‘chirish
+    async delete(id) {
+        try {
+            const firm = await Firm.findByIdAndDelete(id);
+            if (!firm) return response.error("Firma topilmadi");
+            return response.success("Firma muvaffaqiyatli o‘chirildi", firm);
+        } catch (error) {
+            return response.error("Firma o‘chirishda xatolik", error.message);
+        }
+    }
 }
 
 module.exports = new FirmService();

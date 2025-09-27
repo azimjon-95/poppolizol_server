@@ -236,12 +236,6 @@ router.get("/addition/expen/:id", AdditionExpenController.getById);
 router.put("/addition/expen/:id", AdditionExpenController.update);
 router.delete("/addition/expen/:id", AdditionExpenController.delete);
 
-/**
- * ============================
- * Firm Routes
- * ============================
- */
-router.post("/process-payment", FirmService.processCompanyPayment);
 
 /**
  * ============================
@@ -268,6 +262,17 @@ router.get(
  */
 router.get("/customer/:id/stats", customerController.getCustomerStats);
 router.put("/customer/:id", customerController.updateCustomer);
+
+
+/**
+ * ============================
+ * Firm Routes
+ * ============================
+ */
+router.get("/find", FirmService.getAll);
+router.put("/find/:id", FirmService.update);
+router.delete("/find/:id", FirmService.delete);
+router.post("/process-payment", FirmService.processCompanyPayment);
 
 
 module.exports = router;
