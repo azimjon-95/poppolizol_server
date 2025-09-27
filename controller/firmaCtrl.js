@@ -146,34 +146,37 @@ class FirmService {
     }
 
     // ✅ Barcha firmalarni olish
-    async getAll() {
+    async getAll(req, res) {
         try {
-            const firms = await Firm.find().sort({ createdAt: -1 });
-            return response.success("Barcha firmalar", firms);
+            const firms = await Firm.find().populate("products");
+            return response.success(res, "Firmalar muvaffaqiyatli o'qildi", firms);
         } catch (error) {
-            return response.error("Firmalarni olishda xatolik", error.message);
+            return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
         }
     }
 
     // ✅ Firmani yangilash
-    async update(id, data) {
+    // async update(id, data) {
+    async update(req, res) {
         try {
-            const firm = await Firm.findByIdAndUpdate(id, data, { new: true, runValidators: true });
-            if (!firm) return response.error("Firma topilmadi");
-            return response.success("Firma muvaffaqiyatli yangilandi", firm);
+            const firm = await Firm.findByIdAndUpdate(req.params.id, req.body, {
+                new: true,
+            });
+            if (!firm) return response.error(res, "Firma topilmadi");
+            return response.success(res, "Firma muvaffaqiyatli yangilandi", firm);
         } catch (error) {
-            return response.error("Firma yangilashda xatolik", error.message);
+            return response.error(res, "Firma yangilashda xatolik", error.message);
         }
     }
 
     // ✅ Firmani o‘chirish
-    async delete(id) {
+    async delete(req, res) {
         try {
-            const firm = await Firm.findByIdAndDelete(id);
+            const firm = await Firm.findByIdAndDelete(req.params.id);
             if (!firm) return response.error("Firma topilmadi");
-            return response.success("Firma muvaffaqiyatli o‘chirildi", firm);
+            return response.success(res, "Firma muvaffaqiyatli o'chirildi", firm);
         } catch (error) {
-            return response.error("Firma o‘chirishda xatolik", error.message);
+            return response.error(res, "Firma o‘chirishda xatolik", error.message);
         }
     }
 }
