@@ -3,6 +3,8 @@ const { Product, Factory, AdditionExpen } = require("../model/factoryModel");
 const ProductNorma = require("../model/productNormaSchema");
 const FinishedProduct = require("../model/finishedProductModel");
 const Admins = require("../model/adminModel");
+const moment = require('moment');
+const { Salecart, Customer } = require("../model/saleCartSchema");
 const Expense = require("../model/expenseModel");
 const ProductionHistory = require("../model/ProductionHistoryModel");
 const Inventory = require("../model/inventoryHistoryModel");
@@ -419,8 +421,23 @@ class ProductionSystem {
 
   async finishedProducts(req, res) {
     try {
-      const products = await FinishedProduct.find();
-      const material = await Material.findOne({ category: "BN-5" });
+      // 1) deliveredItems bo‘yicha umumiy sotilgan miqdorlarni hisoblash
+      const topProducts = await Salecart.aggregate([
+        { $unwind: "$deliveredItems" },
+        {
+          $group: {
+            _id: "$deliveredItems.productName",
+            totalSold: { $sum: "$deliveredItems.deliveredQuantity" },
+          },
+        },
+        { $sort: { totalSold: -1 } }, // eng ko‘p sotilganidan eng kamigacha
+      ]);
+
+      console.log(topProducts);
+
+      // 2) finishedProduct va materialni olish
+      const products = await FinishedProduct.find().lean();
+      const material = await Material.findOne({ category: "BN-5" }).lean();
 
       const bn = {
         _id: material._id,
@@ -433,12 +450,25 @@ class ProductionSystem {
         returnInfo: [],
       };
 
-      // bn ni products massiviga qo‘shish
-      const newData = [...products, bn];
+      let newData = [...products, bn];
+
+      // 3) productlarni sotilgan miqdorga qarab tartiblash
+      const soldMap = {};
+      topProducts.forEach((p) => {
+        soldMap[p._id] = p.totalSold;
+      });
+
+      newData.sort((a, b) => {
+        const soldA = soldMap[a.productName] || 0;
+        const soldB = soldMap[b.productName] || 0;
+
+        if (soldA === soldB) return 0;
+        return soldB - soldA; // katta miqdor yuqorida
+      });
 
       return response.success(
         res,
-        "Finished products retrieved successfully",
+        "Finished products retrieved and sorted successfully",
         newData
       );
     } catch (error) {
@@ -450,7 +480,6 @@ class ProductionSystem {
     }
   }
 
-  // Get production history
   async productionHistory(req, res) {
     try {
       const { startDate, endDate } = req.query;
@@ -553,8 +582,7 @@ class ProductionSystem {
         session.endSession();
         return response.error(
           res,
-          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${
-            bn3Material?.quantity || 0
+          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${bn3Material?.quantity || 0
           }`
         );
       }
@@ -1005,6 +1033,50 @@ class ProductionSystem {
       return response.serverError(
         res,
         "Mahsulotni o‘chirishda xatolik",
+        error.message
+      );
+    }
+  }
+
+
+
+  async getTopProductsByMonth(req, res) {
+    try {
+      let { monthYear } = req.query; // front-enddan "YYYY-MM" keladi
+      if (!monthYear) {
+        // agar kelmasa default hozirgi oy
+        monthYear = moment().format("YYYY-MM");
+      }
+
+      // boshlanish va tugash sanalari
+      const startDate = moment(monthYear, "YYYY-MM").startOf("month").toDate();
+      const endDate = moment(monthYear, "YYYY-MM").endOf("month").toDate();
+
+      const topProducts = await Salecart.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startDate, $lte: endDate },
+          },
+        },
+        { $unwind: "$deliveredItems" },
+        {
+          $group: {
+            _id: "$deliveredItems.productName",
+            totalSold: { $sum: "$deliveredItems.deliveredQuantity" },
+          },
+        },
+        { $sort: { totalSold: -1 } },
+      ]);
+
+      return response.success(
+        res,
+        "Top mahsulotlar muvaffaqiyatli olindi",
+        topProducts,
+      );
+    } catch (error) {
+      return response.serverError(
+        res,
+        "Top mahsulotlarni olishda xatolik",
         error.message
       );
     }

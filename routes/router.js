@@ -102,6 +102,7 @@ router.post("/production-process", productionSystem.productionProcess);
 router.post("/production/bn5", productionSystem.createBn5Production);
 router.post("/production/salesBN5", productionSystem.productionForSalesBN5);
 router.get("/inventory", productionSystem.getInventory);
+router.get("/top-products", productionSystem.getTopProductsByMonth);
 router.put("/finished-products/:id", productionSystem.updateFinished);
 router.delete("/finished-products/:id", productionSystem.deleteFinished);
 
@@ -236,12 +237,6 @@ router.get("/addition/expen/:id", AdditionExpenController.getById);
 router.put("/addition/expen/:id", AdditionExpenController.update);
 router.delete("/addition/expen/:id", AdditionExpenController.delete);
 
-/**
- * ============================
- * Firm Routes
- * ============================
- */
-router.post("/process-payment", FirmService.processCompanyPayment);
 
 /**
  * ============================
@@ -268,6 +263,17 @@ router.get(
  */
 router.get("/customer/:id/stats", customerController.getCustomerStats);
 router.put("/customer/:id", customerController.updateCustomer);
+
+
+/**
+ * ============================
+ * Firm Routes
+ * ============================
+ */
+router.get("/find", FirmService.getAll);
+router.put("/find/:id", FirmService.update);
+router.delete("/find/:id", FirmService.delete);
+router.post("/process-payment", FirmService.processCompanyPayment);
 
 
 module.exports = router;

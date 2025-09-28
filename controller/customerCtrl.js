@@ -53,15 +53,25 @@ class customerController {
         }
     }
 
-    // ✏️ Faqat ruxsat berilgan fieldlarni yangilash
+    // ✏️ Faqat schema'dagi fieldlarni update qilish
     async updateCustomer(req, res) {
         try {
             const { id } = req.params;
-            const { name, type, phone, companyAddress, company } = req.body;
+
+            // Ruxsat berilgan fieldlar
+            const allowedFields = ["name", "type", "phone", "companyAddress", "company", "balans"];
+
+            // req.body'dan faqat allowedFields dagilarini olish
+            const updateData = {};
+            for (let key of allowedFields) {
+                if (req.body[key] !== undefined) {
+                    updateData[key] = req.body[key];
+                }
+            }
 
             const customer = await Customer.findByIdAndUpdate(
                 id,
-                { name, type, phone, companyAddress, company },
+                updateData,
                 { new: true, runValidators: true }
             );
 
@@ -73,6 +83,7 @@ class customerController {
             return response.serverError(res, "Server xatosi");
         }
     }
+
 }
 
 module.exports = new customerController();

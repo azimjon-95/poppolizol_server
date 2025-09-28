@@ -407,7 +407,7 @@ class SaleController {
         // 1) Shu mahsulot qatnashgan barcha buyurtmalarni yig‘ib olamiz
         const candidateSales = sales.filter((sale) =>
           sale.items.some(
-            (i) => i.productId.toString() === productId.toString()
+            (i) => i.productName === productName
           )
         );
 
@@ -419,12 +419,12 @@ class SaleController {
         // 2) Har bir buyurtma bo‘yicha ketma-ket yuborish
         for (const sale of candidateSales) {
           const saleItem = sale.items.find(
-            (i) => i.productId.toString() === productId.toString()
+            (i) => i.productName === productName
           );
 
           // Oldin yuborilgan miqdorni hisoblash
           const alreadyDelivered = sale.deliveredItems
-            .filter((di) => di.productId.toString() === productId.toString())
+            .filter((di) => di.productName === productName)
             .reduce((sum, di) => sum + di.deliveredQuantity, 0);
 
           const remaining = saleItem.quantity - alreadyDelivered;
@@ -435,11 +435,15 @@ class SaleController {
 
           if (deliverNow > 0) {
             // 🔹 Omborni kamaytirish
-            let product = await Material.findById(productId).session(session);
+            // let product = await Material.findById(productName).session(session);
+            // if (!product) {
+            //   product = await FinishedProduct.findById(productName).session(
+            //     session
+            //   );
+            // }
+            let product = await Material.findOne({ name: productName }).session(session);
             if (!product) {
-              product = await FinishedProduct.findById(productId).session(
-                session
-              );
+              product = await FinishedProduct.findOne({ productName: productName }).session(session);
             }
             if (!product || product.quantity < deliverNow) {
               await session.abortTransaction();
@@ -483,7 +487,7 @@ class SaleController {
       // 5️⃣ Customer balansiga umumiy summani qo‘shish
       customer.balans += total;
       await customer.save({ session, validateModifiedOnly: true });
-      
+
       await calculateLoadedPrices(new Date(), session);
 
       await session.commitTransaction();
@@ -801,18 +805,18 @@ class SaleController {
 
         await sale.save({ session });
 
-        // Har bir yopilgan qarz uchun expense yozamiz
-        const expense = new Expense({
-          relatedId: customerId,
-          type: "kirim",
-          paymentMethod: paymentType || "naqt",
-          category: "Mijoz tulovi",
-          amount: payNow,
-          description: description || "Mijoz qarz to'lovi",
-          date: new Date(),
-        });
-        await expense.save({ session });
       }
+      // Har bir yopilgan qarz uchun expense yozamiz
+      const expense = new Expense({
+        relatedId: customerId,
+        type: "kirim",
+        paymentMethod: paymentType || "naqt",
+        category: "Mijoz tulovi",
+        amount,
+        description: description || "Mijoz qarz to'lovi",
+        date: new Date(),
+      });
+      await expense.save({ session });
 
       // umumiy kassaga yozish
       await Balance.updateBalance(
