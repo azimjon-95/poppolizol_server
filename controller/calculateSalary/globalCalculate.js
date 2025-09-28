@@ -4,19 +4,16 @@ const ProductionHistory = require("../../model/ProductionHistoryModel");
 const { Product: ProductPriceInfo } = require("../../model/factoryModel");
 
 async function reCalculateGlobalSalaries(unit, date, session) {
+
   let today = new Date(date);
   today.setHours(0, 0, 0, 0);
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
 
-  console.log("unit", unit);
-
   const normalizedUnit = unit
     .toLowerCase()
     .replace(/rubiroid|ruberoid/i, "ruberoid")
-    .replace(/polizol/i, "polizol");
-
-  console.log("normalizedUnit", normalizedUnit);
+    .replace(/polizol|polizol ish boshqaruvchi/i, "polizol");
 
   const searchUnit =
     normalizedUnit === "ruberoid"
@@ -60,6 +57,8 @@ async function reCalculateGlobalSalaries(unit, date, session) {
       date: today,
       department: department.toLowerCase().includes("okisleniya")
         ? "Okisleniya"
+        : department.toLowerCase().includes("polizol")
+        ? "polizol"
         : department,
       workers: [],
     });
