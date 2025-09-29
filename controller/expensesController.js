@@ -154,18 +154,28 @@ class ExpenseController {
       const praymerInventory = Object.values(praymerItems).filter((i) => i.quantity > 0 || i.melQuantity > 0);
       // =============================
 
+      const total =
+        consolidatedInventory.reduce(
+          (sum, i) => sum + i.quantity * i.sellingPrice,
+          0
+        ) +
+        consolidatedProductionHistory.reduce(
+          (sum, i) => sum + i.items.reduce(
+            (subSum, item) => subSum + item.quantityProduced * item.salePrice,
+            0
+          ),
+          0
+        ) + praymerInventory.reduce(
+          (subSum, item) => subSum + item.quantity * item.sellingPrice,
+          0
+        );
 
       // Calculate totals and percentages
-      const calcTotal = (arr) => arr.reduce((sum, item) => sum + item.quantity * item.sellingPrice, 0);
-      const totalProduction = calcTotal(consolidatedProductionHistory);
-      const totalInventory = calcTotal(consolidatedInventory);
-      const totalPraymer = calcTotal(praymerInventory);
-      const grandTotal = totalProduction + totalInventory + totalPraymer;
+      const grandTotal = total;
       const profit = grandTotal - totalAmount;
       const totalWithProfit = totalAmount + profit;
       const profitPercentage = totalWithProfit > 0 ? (profit / totalWithProfit) * 100 : 0;
       const expensePercentage = 100 - profitPercentage;
-
 
       // Format output
       const formattedOutput = Object.entries(totalByCategory).map(([category, amount]) => ({
