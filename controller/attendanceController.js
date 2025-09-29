@@ -21,8 +21,6 @@ class AttendanceController {
         cleaning,
       } = req.body;
 
-      console.log(unit);
-
       if (!unit) {
         await session.abortTransaction();
         session.endSession();
@@ -99,7 +97,7 @@ class AttendanceController {
               employee: employeeId,
               date: new Date(date),
               percentage,
-              unit: user.unit,
+              unit: unit,
             },
           ],
           { session }
@@ -108,6 +106,7 @@ class AttendanceController {
           let unitForSalary = user.unit.includes("rubiroid")
             ? "ruberoid"
             : unit;
+
           await reCalculateGlobalSalaries(unitForSalary, date, session);
           await calculateLoadedPrices(date, session);
         }
@@ -126,6 +125,7 @@ class AttendanceController {
           let unitForSalary = user.unit.includes("rubiroid")
             ? "ruberoid"
             : user.unit;
+
           await reCalculateGlobalSalaries(unitForSalary, date, session);
           await calculateLoadedPrices(date, session);
         }
@@ -142,6 +142,7 @@ class AttendanceController {
         });
 
         if (!salaryRecord) {
+
           let result = await SalaryRecord.create(
             [
               {
@@ -150,8 +151,9 @@ class AttendanceController {
                 amount: cleaning,
                 department: unit.toLowerCase().includes("okisleniya")
                   ? "Okisleniya"
+                  : unit.toLowerCase().includes("polizol")
+                  ? "polizol"
                   : unit,
-                // department: unit,
                 totalSum: 120000 * percentage,
                 salaryPerPercent: 120000 * percentage,
                 workers: [
@@ -183,17 +185,6 @@ class AttendanceController {
           let totalSum = totalPercentage * 120000;
           let salaryPerPercent = totalSum / totalPercentage;
 
-          // salaryRecord.workers.push({
-          //   employee: employeeId,
-          //   percentage: percentage,
-          //   amount: 120000 * percentage,
-          // });
-
-          // salaryRecord.totalSum = totalSum;
-          // salaryRecord.salaryPerPercent = salaryPerPercent;
-
-          // await salaryRecord.save({ session });
-
           // agar worker mavjud bo'lsa amount qo'shamiz, aks holda yangi yozuv qo'shamiz
           const existingIdx = salaryRecord.workers.findIndex(
             (w) => w.employee.toString() === employeeId.toString()
@@ -224,9 +215,7 @@ class AttendanceController {
 
       // await updateSalaryRecordForDate(unit, date, session);
 
-      let unitForSalary = user.unit.includes("rubiroid")
-        ? "ruberoid"
-        : user.unit;
+      let unitForSalary = unit.includes("rubiroid") ? "ruberoid" : unit;
       await reCalculateGlobalSalaries(unitForSalary, date, session);
       await calculateLoadedPrices(date, session);
 
@@ -372,6 +361,7 @@ class AttendanceController {
       let unitForSalary = user.unit.includes("rubiroid")
         ? "ruberoid"
         : user.unit;
+
       await reCalculateGlobalSalaries(unitForSalary, user?.date, session);
       await calculateLoadedPrices(user?.date, session);
 

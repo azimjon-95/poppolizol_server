@@ -780,7 +780,6 @@ async function calculateLoadedPrices(date, externalSession) {
         const deptDeliveredQuantity = Math.round(
           item.deliveredQuantity * deptLoadPercentage
         );
-
         let salaryRecord = await SalaryRecord.findOne({
           date: { $gte: startOfDay, $lte: endOfDay },
           department: dept,
@@ -796,7 +795,9 @@ async function calculateLoadedPrices(date, externalSession) {
 
           salaryRecord = new SalaryRecord({
             date: startOfDay,
-            department: dept,
+            department: dept.toLowerCase().includes("polizol")
+              ? "polizol"
+              : dept,
             producedCount: 0,
             // loadedCount: item.deliveredQuantity,
             loadedCount:
