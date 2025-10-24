@@ -140,8 +140,8 @@ const getEmployeeSalaryInfoInternal = async (
     ((employee.paymentType === "ishbay"
       ? productionSalary
       : employee.paymentType === "kunlik"
-      ? dailySalary
-      : employee.salary || 0) || 0) +
+        ? dailySalary
+        : employee.salary || 0) || 0) +
     (unloadingSalary || 0) +
     (bonusSum || 0);
 

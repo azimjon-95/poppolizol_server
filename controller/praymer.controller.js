@@ -7,6 +7,94 @@ const FinishedProduct = require("../model/finishedProductModel");
 
 class PraymerController {
     // CREATE
+    // static async createProduction(req, res) {
+    //     const session = await mongoose.startSession();
+    //     session.startTransaction();
+
+    //     try {
+    //         const {
+    //             productionName,
+    //             productionQuantity,
+    //             salePricePerBucket,
+    //             totals,
+    //             items
+    //         } = req.body;
+    //         if (!productionName || !productionQuantity || !totals || !totals.costAll || !salePricePerBucket) {
+    //             await session.abortTransaction();
+    //             session.endSession();
+    //             return Response.error(res, 'Missing required fields');
+    //         }
+
+    //         // Materials quantity ni yangilash
+    //         if (items && items.length > 0) {
+    //             for (const item of items) {
+    //                 // Faqat materialId mavjud bo'lgan itemlarni qaraymiz
+    //                 if (item._id && mongoose.Types.ObjectId.isValid(item._id)) {
+    //                     const material = await Material.findById(item._id).session(session);
+
+    //                     if (material) {
+    //                         // Yetarli miqdor borligini tekshirish
+    //                         if (material.quantity < item.baseQty) {
+    //                             await session.abortTransaction();
+    //                             session.endSession();
+    //                             return Response.error(res, `Yetarli ${material.name} yo'q. Mavjud: ${material.quantity}, Kerak: ${item.baseQty}`);
+    //                         }
+
+    //                         // Material miqdorini kamaytirish
+    //                         material.quantity -= item.baseQty;
+    //                         await material.save({ session });
+    //                     } else {
+    //                         await session.abortTransaction();
+    //                         session.endSession();
+    //                         return Response.error(res, `Material topilmadi: ${item.name}`);
+    //                     }
+    //                 }
+    //                 // Agar materialId yo'q bo'lsa (masalan, labor kabi), uni o'tkazib yuboramiz
+    //             }
+    //         }
+
+    //         // FinishedProductni tekshirish
+    //         let finishedProduct = await FinishedProduct.findOne({
+    //             productName: productionName,
+    //             isDefective: false
+    //         }).session(session);
+
+    //         if (finishedProduct) {
+    //             finishedProduct.quantity += productionQuantity;
+    //             finishedProduct.productionCost = Math.max(finishedProduct.productionCost || 0, totals.costAll);
+    //             finishedProduct.sellingPrice = Math.max(finishedProduct.sellingPrice || 0, salePricePerBucket);
+    //             await finishedProduct.save({ session });
+    //         } else {
+    //             let [newFinishedProduct] = await FinishedProduct.create([{
+    //                 productName: productionName,
+    //                 category: 'Praymer',
+    //                 quantity: productionQuantity,
+    //                 productionCost: totals.costAll,
+    //                 sellingPrice: salePricePerBucket,
+    //                 productionDate: new Date(),
+    //             }], { session });
+
+    //             finishedProduct = newFinishedProduct;
+    //         }
+
+    //         // Praymer yaratish
+    //         let [production] = await Praymer.create([req.body], { session });
+
+    //         // Commit
+    //         await session.commitTransaction();
+    //         session.endSession();
+
+    //         return Response.created(res, 'Ishlab chiqarish muvaffaqiyatli yaratildi', {
+    //             praymer: production,
+    //             finishedProduct
+    //         });
+    //     } catch (error) {
+    //         await session.abortTransaction();
+    //         session.endSession();
+    //         return Response.error(res, error.message);
+    //     }
+    // }
+    // CREATE
     static async createProduction(req, res) {
         const session = await mongoose.startSession();
         session.startTransaction();
@@ -67,7 +155,7 @@ class PraymerController {
             } else {
                 let [newFinishedProduct] = await FinishedProduct.create([{
                     productName: productionName,
-                    category: 'Praymer',
+                    category: productionName === 'Mastika' ? 'Mastika' : 'Praymer', // Dynamic category based on productionName
                     quantity: productionQuantity,
                     productionCost: totals.costAll,
                     sellingPrice: salePricePerBucket,
@@ -77,15 +165,13 @@ class PraymerController {
                 finishedProduct = newFinishedProduct;
             }
 
-            // Praymer yaratish
             let [production] = await Praymer.create([req.body], { session });
-
             // Commit
             await session.commitTransaction();
             session.endSession();
 
             return Response.created(res, 'Ishlab chiqarish muvaffaqiyatli yaratildi', {
-                praymer: production,
+                production, // Generic name for the created document
                 finishedProduct
             });
         } catch (error) {
@@ -94,7 +180,6 @@ class PraymerController {
             return Response.error(res, error.message);
         }
     }
-
 
     // READ (Get all)
     static async getAllProductions(req, res) {
