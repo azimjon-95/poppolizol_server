@@ -135,7 +135,8 @@ class DashboardController {
                 });
             }
 
-            const plans = await Plan.find({ createdAt: { $gte: start, $lte: end } }).populate("employeeId").populate("sales");
+            // const currentSales = await Salecart.find({ createdAt: { $gte: start, $lte: end } });
+
             const salesBySaler = {};
             currentSales.forEach((sale) => {
                 const id = sale.salerId?.toString();
@@ -145,19 +146,38 @@ class DashboardController {
                 salesBySaler[id].count += 1;
             });
 
+            const plans = await Plan.find({ createdAt: { $gte: start, $lte: end } }).populate("employeeId").populate("sales");
+
+
             const salerRatings = plans.map((plan) => {
                 const sId = plan.employeeId?._id?.toString();
-                const actual = salesBySaler[sId]?.total || 0;
-                const count = salesBySaler[sId]?.count || 0;
 
-                const percent = plan.targetAmount > 0 ? Math.round((actual / plan.targetAmount) * 100) : 0;
+
+                // Shu xodimga tegishli va oy oralig'idagi sotuvlarni filtrlash
+                const employeeSales = currentSales.filter((sale) => {
+                    const saleDate = new Date(sale.createdAt);
+                    return (
+                        sale.salerId?.toString() === sId &&
+                        saleDate >= start &&
+                        saleDate <= end
+                    );
+                });
+                // Shu xodimga tegishli umumiy summa
+                const totalAmount = employeeSales.reduce(
+                    (sum, sale) => sum + (sale.payment?.paidAmount || 0),
+                    0
+                );
+
+                // const count = salesBySaler[sId]?.count || 0;
+
+                const percent = plan.targetAmount > 0 ? Math.round((totalAmount / plan.targetAmount) * 100) : 0;
                 return {
                     name: `${plan.employeeId.firstName} ${plan.employeeId.lastName}`,
                     percent,
                     target: plan.targetAmount,
-                    current: actual,
-                    orders: count,
-                    avg: count ? Math.round(actual / count) : 0,
+                    current: totalAmount,
+                    orders: employeeSales?.length,
+                    avg: employeeSales?.length ? Math.round(totalAmount / employeeSales?.length) : 0,
                 };
             });
             const borrowSum = await Debt.aggregate([{ $match: { type: "borrow", status: "active" } }, { $group: { _id: null, total: { $sum: "$remainingAmount" } } }]).then(r => r[0]?.total || 0);

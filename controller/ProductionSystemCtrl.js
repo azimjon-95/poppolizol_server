@@ -135,6 +135,9 @@ class ProductionSystem {
       const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
       const totalGasCost = totalGasUsed * gasCostPerKWH;
 
+      // Parse period expense
+      const periodExpense = parseFloat((utilities.periodExpense || 0).toFixed(2));
+
       // Process materials (batch level)
       const materialsUsed = [];
       let totalMaterialCost = 0;
@@ -255,7 +258,8 @@ class ProductionSystem {
         totalMaterialCost +
         totalGasCost +
         totalElectricityCost +
-        additionalAmount;
+        additionalAmount +
+        periodExpense;
       const sharedPerUnit =
         totalQuantity > 0 ? totalSharedCost / totalQuantity : 0;
 
@@ -322,6 +326,7 @@ class ProductionSystem {
             gasCost: totalGasCost,
             electricityConsumption: totalElectricityUsed,
             electricityCost: totalElectricityCost,
+            periodExpense: periodExpense,
             otherExpenses: additionalAmount,
             workerExpenses: totalWorkerCost + totalLoadingCost, // Combined worker and loading costs
             totalBatchCost: totalCostSum,
@@ -405,6 +410,7 @@ class ProductionSystem {
           totalGasUsed,
           totalElectricityCost,
           totalGasCost,
+          periodExpense,
         }
       );
     } catch (error) {
@@ -433,7 +439,7 @@ class ProductionSystem {
         { $sort: { totalSold: -1 } }, // eng ko‘p sotilganidan eng kamigacha
       ]);
 
-      console.log(topProducts);
+
 
       // 2) finishedProduct va materialni olish
       const products = await FinishedProduct.find().lean();
