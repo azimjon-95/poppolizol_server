@@ -59,6 +59,11 @@ const productionHistorySchema = new mongoose.Schema({
             min: 0
         }
     },
+    periodExpense: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     gasConsumption: {
         type: Number,
         required: true,
