@@ -406,9 +406,7 @@ class SaleController {
 
         // 1) Shu mahsulot qatnashgan barcha buyurtmalarni yig‘ib olamiz
         const candidateSales = sales.filter((sale) =>
-          sale.items.some(
-            (i) => i.productName === productName
-          )
+          sale.items.some((i) => i.productName === productName)
         );
 
         if (candidateSales.length === 0) {
@@ -441,9 +439,13 @@ class SaleController {
             //     session
             //   );
             // }
-            let product = await Material.findOne({ name: productName }).session(session);
+            let product = await Material.findOne({ name: productName }).session(
+              session
+            );
             if (!product) {
-              product = await FinishedProduct.findOne({ productName: productName }).session(session);
+              product = await FinishedProduct.findOne({
+                productName: productName,
+              }).session(session);
             }
             if (!product || product.quantity < deliverNow) {
               await session.abortTransaction();
@@ -804,7 +806,6 @@ class SaleController {
         });
 
         await sale.save({ session });
-
       }
       // Har bir yopilgan qarz uchun expense yozamiz
       const expense = new Expense({
@@ -839,7 +840,6 @@ class SaleController {
     } catch (error) {
       await session.abortTransaction();
       session.endSession();
-      console.error(error);
       return response.serverError(res, "Xatolik yuz berdi", {
         error: error.message,
       });
@@ -1288,7 +1288,6 @@ class SaleController {
           // Xato yuz berganda tranzaksiyani bekor qilish
           await session.abortTransaction();
           session.endSession();
-          console.error("Tranzaksiya xatosi:", error);
           return response.serverError(
             res,
             "Tranzaksiya muvaffaqiyatsiz yakunlandi",
@@ -1305,7 +1304,6 @@ class SaleController {
         );
       }
     } catch (error) {
-      console.error("Server xatosi:", error);
       return response.serverError(res, "Server xatosi", error.message);
     }
   }

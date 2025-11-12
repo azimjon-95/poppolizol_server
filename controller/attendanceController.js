@@ -89,6 +89,24 @@ class AttendanceController {
         realPercentage = +(Number(percentage) + 0.2).toFixed(2);
       }
 
+      let today = new Date(date);
+      today.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(today.getTime() + 86399999);
+
+      let cleanSalaryRecord = await SalaryRecord.findOne({
+        date: { $gte: today, $lte: endOfDay },
+        type: "cleaning",
+      });
+
+      if (!cleaning && cleanSalaryRecord) {
+        await session.abortTransaction();
+        session.endSession();
+        return response.warning(
+          res,
+          "Bugun shanbalik uchun davomat saqlay olasiz"
+        );
+      }
+
       let attendanceRecord;
       if (user.unit === "avto kara") {
         attendanceRecord = await Attendance.create(
@@ -142,7 +160,6 @@ class AttendanceController {
         });
 
         if (!salaryRecord) {
-
           let result = await SalaryRecord.create(
             [
               {
@@ -216,9 +233,10 @@ class AttendanceController {
       // await updateSalaryRecordForDate(unit, date, session);
 
       let unitForSalary = unit.includes("rubiroid") ? "ruberoid" : unit;
-      await reCalculateGlobalSalaries(unitForSalary, date, session);
-      await calculateLoadedPrices(date, session);
-
+      if (!cleaning) {
+        await reCalculateGlobalSalaries(unitForSalary, date, session);
+        await calculateLoadedPrices(date, session);
+      }
       await session.commitTransaction();
       session.endSession();
 
@@ -364,7 +382,6 @@ class AttendanceController {
 
       await reCalculateGlobalSalaries(unitForSalary, user?.date, session);
       await calculateLoadedPrices(user?.date, session);
-
       await session.commitTransaction();
       session.endSession();
       return response.success(res, "Davomat muvaffaqiyatli o'chirildi", null);

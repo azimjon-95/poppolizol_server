@@ -3,7 +3,7 @@ const { Product, Factory, AdditionExpen } = require("../model/factoryModel");
 const ProductNorma = require("../model/productNormaSchema");
 const FinishedProduct = require("../model/finishedProductModel");
 const Admins = require("../model/adminModel");
-const moment = require('moment');
+const moment = require("moment");
 const { Salecart, Customer } = require("../model/saleCartSchema");
 const Expense = require("../model/expenseModel");
 const ProductionHistory = require("../model/ProductionHistoryModel");
@@ -433,8 +433,6 @@ class ProductionSystem {
         { $sort: { totalSold: -1 } }, // eng ko‘p sotilganidan eng kamigacha
       ]);
 
-      console.log(topProducts);
-
       // 2) finishedProduct va materialni olish
       const products = await FinishedProduct.find().lean();
       const material = await Material.findOne({ category: "BN-5" }).lean();
@@ -582,7 +580,8 @@ class ProductionSystem {
         session.endSession();
         return response.error(
           res,
-          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${bn3Material?.quantity || 0
+          `BN-3 yetarli emas. Talab: ${bn3Amount}, Mavjud: ${
+            bn3Material?.quantity || 0
           }`
         );
       }
@@ -924,7 +923,6 @@ class ProductionSystem {
         }
       );
     } catch (error) {
-      console.error("Production error:", error);
       await session.abortTransaction();
       return response.error(
         res,
@@ -1003,7 +1001,6 @@ class ProductionSystem {
         updatedProduct
       );
     } catch (error) {
-      console.error("Update error:", error);
       return response.serverError(
         res,
         "Mahsulotni yangilashda xatolik",
@@ -1029,7 +1026,6 @@ class ProductionSystem {
         deletedProduct
       );
     } catch (error) {
-      console.error("Delete error:", error);
       return response.serverError(
         res,
         "Mahsulotni o‘chirishda xatolik",
@@ -1037,8 +1033,6 @@ class ProductionSystem {
       );
     }
   }
-
-
 
   async getTopProductsByMonth(req, res) {
     try {
@@ -1071,7 +1065,7 @@ class ProductionSystem {
       return response.success(
         res,
         "Top mahsulotlar muvaffaqiyatli olindi",
-        topProducts,
+        topProducts
       );
     } catch (error) {
       return response.serverError(
