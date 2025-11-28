@@ -172,6 +172,7 @@ router.put("/sales/:id", SaleController.updateSale);
 router.delete("/sales/:id", SaleController.deleteSale);
 router.post("/sales/pay-debt", SaleController.payDebt);
 router.get("/filtered", SaleController.getFilteredSales);
+router.get('/sales/undelivered-items/:customerId', SaleController.getUndeliveredItems);
 router.post("/sales/:id/return", SaleController.returnItems);
 router.get("/sales/customer", SaleController.getCustomerSales);
 router.get("/companys", SaleController.getCompanys);

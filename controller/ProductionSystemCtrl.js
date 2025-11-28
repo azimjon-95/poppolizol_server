@@ -22,17 +22,30 @@ class ProductionSystem {
 
     try {
       const {
-        date = new Date(),
+        date = "",
         products = [],
         consumedMaterials = [],
         utilities,
       } = req.body;
 
+      // ✅ Sana formatini to‘g‘rilash (dd.mm.yyyy → yyyy-mm-dd)
+      let parsedDate;
+      if (date) {
+        const [day, month, year] = date.split(".");
+        // Local vaqtga mos qilib yaratamiz
+        const localDate = new Date(Number(year), Number(month) - 1, Number(day));
+        // UTC vaqtga 5 soatni (O'zbekiston uchun) qo'shamiz
+        parsedDate = new Date(localDate.getTime() + 5 * 60 * 60 * 1000);
+      } else {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        parsedDate = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+      }
+
       if (products.length === 0) {
         return response.error(res, "Hech qanday mahsulot ko‘rsatilmagan");
       }
 
-      // Calculate total quantity
       const totalQuantity = products.reduce(
         (sum, p) => sum + Number(p.quantity),
         0
@@ -42,14 +55,15 @@ class ProductionSystem {
         return response.error(res, "Umumiy miqdor noto‘g‘ri");
       }
 
-      const today = new Date();
+      // ✅ Bugungi kun (parsedDate asosida)
+      const today = new Date(parsedDate);
       today.setHours(0, 0, 0, 0);
 
       const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setDate(today.getDate() + 1);
 
-      // 1. Bugungi kun chiqimlarini olish
-      let expenses = await Expense.find({
+      // 1️⃣ Shu sanaga tegishli chiqimlarni olish
+      const expenses = await Expense.find({
         type: "chiqim",
         category: {
           $in: [
@@ -89,14 +103,11 @@ class ProductionSystem {
         createdAt: { $gte: today, $lt: tomorrow },
       }).session(session);
 
-      // 2. Filtrlash — Avans va Oylik maosh larida ishlab chiqarish xodimlarini chiqarib tashlash
+      // 2️⃣ Ishlab chiqarish xodimlarini chiqarib tashlash
       const filteredExpenses = [];
-
       for (const exp of expenses) {
         if (
-          ["Avans", "Oylik maosh", "Ish haqi xarajatlari"].includes(
-            exp.category
-          )
+          ["Avans", "Oylik maosh", "Ish haqi xarajatlari"].includes(exp.category)
         ) {
           if (exp.relatedId) {
             const employee = await Admins.findById(exp.relatedId).lean();
@@ -104,12 +115,13 @@ class ProductionSystem {
               filteredExpenses.push(exp);
             }
           } else {
-            filteredExpenses.push(exp); // relatedId yo‘q bo‘lsa ham qo‘shamiz
+            filteredExpenses.push(exp);
           }
         } else {
           filteredExpenses.push(exp);
         }
       }
+
       const totalAmount = filteredExpenses.reduce(
         (sum, item) => sum + item.amount,
         0
@@ -117,34 +129,29 @@ class ProductionSystem {
 
       const additionalAmount = totalAmount || 0;
 
-      // Fetch factory
+      // ✅ Zavod ma'lumotlarini olish
       const [factory] = await Factory.find().session(session);
       if (!factory) {
         return response.notFound(res, "Zavod ma'lumotlari topilmadi!");
       }
 
-      // Calculate resource costs
+      // ✅ Resurs xarajatlari
       const electricityCostPerKWH = Number(factory.electricityPrice);
       const gasCostPerKWH = Number(factory.methaneGasPrice);
       const totalElectricityUsed = parseFloat(
         (utilities.electricityConsumption || 0).toFixed(2)
       );
-      const totalGasUsed = parseFloat(
-        (utilities.gasConsumption || 0).toFixed(2)
-      );
+      const totalGasUsed = parseFloat((utilities.gasConsumption || 0).toFixed(2));
       const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
       const totalGasCost = totalGasUsed * gasCostPerKWH;
 
-      // Parse period expense
       const periodExpense = parseFloat((utilities.periodExpense || 0).toFixed(2));
 
-      // Process materials (batch level)
+      // ✅ Materiallar sarfi
       const materialsUsed = [];
       let totalMaterialCost = 0;
 
-      for (let i = 0; i < consumedMaterials.length; i++) {
-        const consumed = consumedMaterials[i];
-
+      for (const consumed of consumedMaterials) {
         const material = await Material.findById(consumed.materialId).session(
           session
         );
@@ -155,9 +162,7 @@ class ProductionSystem {
           );
         }
 
-        const consumedQuantity = parseFloat(
-          Number(consumed.quantity || 0).toFixed(2)
-        );
+        const consumedQuantity = parseFloat(Number(consumed.quantity || 0).toFixed(2));
         const unitPrice = parseFloat(Number(material.price).toFixed(2));
         const cost = consumedQuantity * unitPrice;
         totalMaterialCost += cost;
@@ -183,7 +188,7 @@ class ProductionSystem {
         });
       }
 
-      // Prepare product data
+      // ✅ Mahsulotlar
       let totalWorkerCost = 0;
       let totalLoadingCost = 0;
       const productDataList = [];
@@ -197,7 +202,7 @@ class ProductionSystem {
         if (!normaId || !quantity || quantity <= 0) {
           return response.error(
             res,
-            `Mahsulot normasi yoki miqdori noto‘g‘ri uchun ${productName}`
+            `Mahsulot normasi yoki miqdori noto‘g‘ri: ${productName}`
           );
         }
 
@@ -205,20 +210,14 @@ class ProductionSystem {
           .lean()
           .session(session);
         if (!productNorma) {
-          return response.notFound(
-            res,
-            `Mahsulot normasi topilmadi uchun ${productName}`
-          );
+          return response.notFound(res, `Norma topilmadi: ${productName}`);
         }
 
         const productionPrice = await Product.findOne({
           name: productName,
         }).session(session);
         if (!productionPrice) {
-          return response.notFound(
-            res,
-            `Narxlar topilmadi uchun ${productName}`
-          );
+          return response.notFound(res, `Narx topilmadi: ${productName}`);
         }
 
         const workerPayPerUnit = parseFloat(
@@ -227,6 +226,7 @@ class ProductionSystem {
         const loadingPayPerUnit = parseFloat(
           Number(productionPrice.loadingCost).toFixed(2)
         );
+
         const productWorkerCost = workerPayPerUnit * quantity;
         const productLoadingCost = loadingPayPerUnit * quantity;
 
@@ -253,22 +253,21 @@ class ProductionSystem {
         });
       }
 
-      // Calculate shared costs per unit
+      // ✅ Umumiy hisob-kitoblar
       const totalSharedCost =
         totalMaterialCost +
         totalGasCost +
         totalElectricityCost +
         additionalAmount +
         periodExpense;
+
       const sharedPerUnit =
         totalQuantity > 0 ? totalSharedCost / totalQuantity : 0;
 
-      // Total cost for the batch
       const totalCostSum = parseFloat(
         (totalSharedCost + totalWorkerCost + totalLoadingCost).toFixed(2)
       );
 
-      // Process each product
       const producedMessages = [];
 
       for (const prodData of productDataList) {
@@ -280,13 +279,11 @@ class ProductionSystem {
           ).toFixed(2)
         );
 
-        // Check for existing FinishedProduct
         let finishedProduct = await FinishedProduct.findOne({
           productName: prodData.productNorma.productName,
         }).session(session);
 
         if (finishedProduct) {
-          // Update existing product
           finishedProduct.quantity += prodData.quantity;
           finishedProduct.productionCost = Math.max(
             finishedProduct.productionCost,
@@ -294,8 +291,7 @@ class ProductionSystem {
           );
           await finishedProduct.save({ session });
         } else {
-          // Create new product
-          finishedProduct = await FinishedProduct.create(
+          await FinishedProduct.create(
             [
               {
                 productName: prodData.productNorma.productName,
@@ -306,97 +302,93 @@ class ProductionSystem {
               },
             ],
             { session }
-          )[0];
+          );
         }
 
         producedMessages.push(
-          `${prodData.productNorma.productName} dan ${prodData.quantity} : ""}`
+          `${prodData.productNorma.productName} dan ${prodData.quantity} ta ishlab chiqarildi`
         );
       }
 
-      // Record batch-level production history optimally
+      // ✅ Ishlab chiqarish tarixi
       await ProductionHistory.create(
         [
           {
-            date: date,
-            products: productsForHistory, // Array of {productName, quantityProduced, salePrice, totalSaleValue}
-            materialsUsed: materialsUsed, // Array of {materialId, materialName, quantityUsed, unitPrice, totalCost}
-            materialStatistics: { totalMaterialCost }, // Or more stats if needed
+            date: parsedDate,
+            products: productsForHistory,
+            materialsUsed,
+            materialStatistics: { totalMaterialCost },
             gasConsumption: totalGasUsed,
             gasCost: totalGasCost,
             electricityConsumption: totalElectricityUsed,
             electricityCost: totalElectricityCost,
-            periodExpense: periodExpense,
+            periodExpense,
             otherExpenses: additionalAmount,
-            workerExpenses: totalWorkerCost + totalLoadingCost, // Combined worker and loading costs
+            workerExpenses: totalWorkerCost + totalLoadingCost,
             totalBatchCost: totalCostSum,
           },
         ],
         { session }
       );
 
-      for (const prodData of productDataList) {
-        // Handle special salary calculations
-        const lowerProductName = prodData.productName.toLowerCase();
-        let date = new Date();
-        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(date.setHours(23, 59, 59, 0));
+      // ✅ Maosh hisoblash (shu sanaga asoslangan)
+      const startOfDay = new Date(parsedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(parsedDate);
+      endOfDay.setHours(23, 59, 59, 999);
 
-        if (lowerProductName.includes("ruberoid")) {
-          let exactSalaryRecord = await SalaryRecord.findOne({
+      for (const prodData of productDataList) {
+        const lowerName = prodData.productName.toLowerCase();
+
+        if (lowerName.includes("ruberoid")) {
+          let record = await SalaryRecord.findOne({
             date: { $gte: startOfDay, $lte: endOfDay },
             department: "ruberoid",
           }).session(session);
 
-          if (!exactSalaryRecord) {
+          if (!record) {
             await SalaryRecord.create(
               [
                 {
-                  date: date,
+                  date: parsedDate,
                   department: "ruberoid",
                   producedCount: prodData.quantity,
                 },
               ],
               { session }
             );
-            await reCalculateGlobalSalaries("ruberoid", date, session);
+          } else {
+            record.producedCount += prodData.quantity;
+            await record.save({ session });
           }
-
-          if (exactSalaryRecord) {
-            exactSalaryRecord.producedCount += prodData.quantity;
-            await exactSalaryRecord.save({ session });
-            await reCalculateGlobalSalaries("ruberoid", date, session);
-          }
+          await reCalculateGlobalSalaries("ruberoid", parsedDate, session);
         }
 
         if (
-          lowerProductName.includes("polizol") ||
-          lowerProductName.includes("folygoizol")
+          lowerName.includes("polizol") ||
+          lowerName.includes("folygoizol")
         ) {
-          let exactSalaryRecord = await SalaryRecord.findOne({
+          let record = await SalaryRecord.findOne({
             date: { $gte: startOfDay, $lte: endOfDay },
             department: "polizol",
           }).session(session);
 
-          if (!exactSalaryRecord) {
+          if (!record) {
             await SalaryRecord.create(
               [
                 {
-                  date: date,
+                  date: parsedDate,
                   department: "polizol",
                   producedCount: prodData.quantity,
                 },
               ],
               { session }
             );
-            await reCalculateGlobalSalaries("polizol", date, session);
+          } else {
+            record.producedCount += prodData.quantity;
+            await record.save({ session });
           }
-
-          if (exactSalaryRecord) {
-            exactSalaryRecord.producedCount += prodData.quantity;
-            await exactSalaryRecord.save({ session });
-            await reCalculateGlobalSalaries("polizol", date, session);
-          }
+          await reCalculateGlobalSalaries("polizol", parsedDate, session);
         }
       }
 

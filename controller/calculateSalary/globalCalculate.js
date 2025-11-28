@@ -19,8 +19,8 @@ async function reCalculateGlobalSalaries(unit, date, session) {
     normalizedUnit === "ruberoid"
       ? { $in: [/rubiroid/i, /ruberoid/i] } // "rubiroid" va "ruberoid" ni qamrab oladi
       : normalizedUnit.toLowerCase().includes("okisleniya")
-      ? /Okisleniya/i
-      : /polizol/i; // "polizol" uchun qo‘shimcha moslik
+        ? /Okisleniya/i
+        : /polizol/i; // "polizol" uchun qo‘shimcha moslik
 
   // Joriy kun davomatini olish
   const todayAttendances = await Attendance.find({
@@ -58,8 +58,8 @@ async function reCalculateGlobalSalaries(unit, date, session) {
       department: department.toLowerCase().includes("okisleniya")
         ? "Okisleniya"
         : department.toLowerCase().includes("polizol")
-        ? "polizol"
-        : department,
+          ? "polizol"
+          : department,
       workers: [],
     });
   }
@@ -136,8 +136,8 @@ async function reCalculateGlobalSalaries(unit, date, session) {
     if (normalizedUnit === "ruberoid") {
       const bonus =
         a.percentage > 1 &&
-        !a.unit.toLowerCase().includes("ish boshqaruvchi") &&
-        a.percentage !== 1.2
+          !a.unit.toLowerCase().includes("ish boshqaruvchi") &&
+          a.percentage !== 1.2
           ? 100000
           : 0;
       newAmount = Math.round(salaryPerPercent * a.percentage) + bonus;

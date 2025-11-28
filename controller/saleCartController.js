@@ -158,201 +158,7 @@ class SaleController {
     }
   }
 
-  // async deliverProduct(req, res) {
-  //   const session = await mongoose.startSession();
-  //   session.startTransaction();
 
-  //   try {
-  //     const { saleId, items, transport, transportCost, deliveredGroups } =
-  //       req.body;
-  //     // Har bir item uchun discountedPrice * quantity
-  //     const total = items.reduce((sum, item) => {
-  //       return sum + item.discountedPrice * item.quantity;
-  //     }, 0);
-
-  //     if (!saleId || !items || !transport || transportCost === undefined) {
-  //       await session.abortTransaction();
-  //       return response.error(res, "Barcha maydonlar to'ldirilishi shart");
-  //     }
-
-  //     // 1️⃣ Customer olish
-  //     const customer = await Customer.findById(saleId).session(session);
-  //     if (!customer) {
-  //       await session.abortTransaction();
-  //       return response.notFound(res, "Mijoz topilmadi");
-  //     }
-
-  //     // 2️⃣ Mijozning sotuv tarixlari
-  //     const sales = await Salecart.find({ customerId: customer._id }).session(
-  //       session
-  //     );
-  //     if (!sales || sales.length === 0) {
-  //       await session.abortTransaction();
-  //       return response.notFound(res, "Mijozning sotuv tarixi topilmadi");
-  //     }
-
-  //     // 3️⃣ Transport yozuvi
-  //     let transportRecord = await Transport.findOne({ transport }).session(
-  //       session
-  //     );
-  //     if (!transportRecord) {
-  //       transportRecord = new Transport({ transport, balance: transportCost });
-  //     } else {
-  //       transportRecord.balance += transportCost;
-  //     }
-  //     await transportRecord.save({ session });
-
-  //     // 4️⃣ Itemlar bo‘yicha yurish
-  //     for (const item of items) {
-  //       let quantityToDeliver = item.quantity;
-  //       const { productId, productName } = item;
-
-  //       // 1) Shu mahsulot qatnashgan barcha buyurtmalarni yig‘ib olamiz
-  //       const candidateSales = sales.filter((sale) =>
-  //         sale.items.some(
-  //           (i) => i.productId.toString() === productId.toString()
-  //         )
-  //       );
-
-  //       if (candidateSales.length === 0) {
-  //         await session.abortTransaction();
-  //         return response.error(res, `Mahsulot topilmadi: ${productName}`);
-  //       }
-
-  //       // 2) Har bir buyurtma bo‘yicha ketma-ket yuborish
-  //       for (const sale of candidateSales) {
-  //         const saleItem = sale.items.find(
-  //           (i) => i.productId.toString() === productId.toString()
-  //         );
-
-  //         // Oldin yuborilgan miqdorni hisoblash
-  //         const alreadyDelivered = sale.deliveredItems
-  //           .filter((di) => di.productId.toString() === productId.toString())
-  //           .reduce((sum, di) => sum + di.deliveredQuantity, 0);
-
-  //         const remaining = saleItem.quantity - alreadyDelivered;
-  //         if (remaining <= 0) continue; // Bu buyurtma to‘liq yuborilgan
-
-  //         // Nechta yuboramiz (kamroq miqdorni tanlaymiz)
-  //         const deliverNow = Math.min(quantityToDeliver, remaining);
-
-  //         if (deliverNow > 0) {
-  //           // 🔹 Omborni kamaytirish
-  //           let product = await Material.findById(productId).session(session);
-  //           if (!product) {
-  //             product = await FinishedProduct.findById(productId).session(
-  //               session
-  //             );
-  //           }
-  //           if (!product || product.quantity < deliverNow) {
-  //             await session.abortTransaction();
-  //             return response.error(
-  //               res,
-  //               `Mahsulot yetarli emas: ${productName}`
-  //             );
-  //           }
-  //           product.quantity -= deliverNow;
-  //           await product.save({ session, validateModifiedOnly: true });
-
-  //           // 🔹 deliveredItems ga yozish
-  //           sale.deliveredItems.push({
-  //             productId,
-  //             productName,
-  //             deliveredQuantity: deliverNow,
-  //             totalAmount: deliverNow * saleItem.pricePerUnit,
-  //             transport,
-  //             transportCost,
-  //             deliveryDate: new Date(),
-  //             deliveredGroups,
-  //           });
-  //           await sale.save({ session });
-
-  //           // Qancha qolganini kamaytiramiz
-  //           quantityToDeliver -= deliverNow;
-  //           if (quantityToDeliver === 0) break; // Hamma yuborildi
-  //         }
-  //       }
-
-  //       // Agar hali ham yuborilmagan qismi qolsa => xato
-  //       if (quantityToDeliver > 0) {
-  //         await session.abortTransaction();
-  //         return response.error(
-  //           res,
-  //           `${productName} mahsulotidan ortiqcha yuborishga urinildi`
-  //         );
-  //       }
-
-  //       if (quantityToDeliver > remaining) {
-  //         await session.abortTransaction();
-  //         return response.error(
-  //           res,
-  //           `${saleItem.productName} uchun maksimal ${remaining} dona yuborish mumkin`
-  //         );
-  //       }
-
-  //       // 🔹 Omborni kamaytirish
-  //       let product = await Material.findById(productId).session(session);
-  //       if (product) {
-  //         if (product.quantity < quantity) {
-  //           await session.abortTransaction();
-  //           return response.error(
-  //             res,
-  //             `Material yetarli emas: ${product.name}`
-  //           );
-  //         }
-  //         product.quantity -= quantity;
-  //         await product.save({ session, validateModifiedOnly: true });
-  //       } else {
-  //         product = await FinishedProduct.findById(productId).session(session);
-  //         if (!product) {
-  //           await session.abortTransaction();
-  //           return response.error(res, `Mahsulot topilmadi: ${productId}`);
-  //         }
-  //         if (product.quantity < quantity) {
-  //           await session.abortTransaction();
-  //           return response.error(
-  //             res,
-  //             `Mahsulot yetarli emas: ${product.productName}`
-  //           );
-  //         }
-  //         product.quantity -= quantity;
-  //         await product.save({ session, validateModifiedOnly: true });
-  //       }
-
-  //       // 🔹 deliveredItems ga yozish
-  //       targetSale.deliveredItems.push({
-  //         productId,
-  //         productName,
-  //         deliveredQuantity: quantity,
-  //         totalAmount: quantity * saleItem.pricePerUnit,
-  //         transport,
-  //         transportCost,
-  //         deliveryDate: new Date(),
-  //         deliveredGroups,
-  //       });
-
-  //       await targetSale.save({ session });
-  //     }
-
-  //     // 5️⃣ Customer balansiga umumiy summani qo‘shish
-  //     customer.balans += total;
-  //     await customer.save({ session, validateModifiedOnly: true });
-
-  //     await calculateLoadedPrices(new Date(), session);
-
-  //     await session.commitTransaction();
-  //     return response.success(res, "Mahsulotlar muvaffaqiyatli yetkazildi!", {
-  //       customer,
-  //       sales,
-  //     });
-  //   } catch (error) {
-  //     console.log(error);
-  //     await session.abortTransaction();
-  //     return response.serverError(res, "Xatolik yuz berdi", error.message);
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // }
 
   async deliverProduct(req, res) {
     const session = await mongoose.startSession();
@@ -973,117 +779,295 @@ class SaleController {
     }
   }
 
-  // Bitta customer va uning tarixi bilan olish
+  // async getFilteredSales(req, res) {
+  //   try {
+  //     const page = parseInt(req.query.page) || 1;
+  //     const limit = parseInt(req.query.limit) || 15;
+  //     // const search = req.query.search || ''; // Yangi: search parametri
+  //     // console.log(`getFilteredSales: page=${req.query.page}, limit=${req.query.limit}, search=${search}`);
+
+  //     let customers = await Customer.find().lean();
+  //     if (!customers.length) {
+  //       return response.notFound(res, "Mijozlar topilmadi", []);
+  //     }
+
+  //     // Yangi: search bo'lsa, mijozlarni filtrla
+  //     let filteredCustomers = customers;
+
+
+  //     const result = await Promise.all(
+  //       filteredCustomers.map(async (customer) => {
+  //         const sales = await Salecart.find({ customerId: customer._id })
+  //           .populate("customerId", "name type phone company balans")
+  //           .sort({ createdAt: -1 })
+  //           .lean();
+
+  //         const expenses = await Expense.find({ relatedId: customer._id }).lean();
+
+  //         let totalUndelivered = 0;
+  //         const groupedDeliveredItems = {};
+  //         sales.forEach((sale) => {
+  //           sale.items.forEach((item) => {
+  //             const delivered = sale.deliveredItems
+  //               .filter((d) => String(d.productId) === String(item.productId))
+  //               .reduce((sum, d) => sum + (d.deliveredQuantity || 0), 0);
+  //             const remaining = item.quantity - delivered;
+  //             if (remaining > 0) totalUndelivered += remaining;
+  //           });
+
+  //           sale.deliveredItems.forEach((d) => {
+  //             const dateKey = new Date(d.deliveryDate).toISOString().slice(0, 13);
+  //             if (!groupedDeliveredItems[dateKey]) groupedDeliveredItems[dateKey] = [];
+  //             groupedDeliveredItems[dateKey].push(d);
+  //           });
+  //         });
+
+  //         let balansStatus = "0";
+  //         if (customer.balans > 0) balansStatus = "Qarzdor";
+  //         else if (customer.balans < 0) balansStatus = "Haqdor";
+  //         else balansStatus = "Mavjud emas";
+
+  //         const lastSaleDate = sales.length ? new Date(sales[0].createdAt) : null;
+
+  //         return {
+  //           ...customer,
+  //           balansStatus,
+  //           history: sales,
+  //           Expenses: expenses,
+  //           totalUndelivered,
+  //           lastSaleDate,
+  //           groupedDeliveredItems,
+  //         };
+  //       })
+  //     );
+
+  //     const now = new Date();
+  //     const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+
+  //     const recentSales = result.filter(c => {
+  //       if (!c.lastSaleDate) return false;
+  //       return now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS;
+  //     });
+
+  //     let oldSales = result
+  //       .filter(c => !c.lastSaleDate || now - new Date(c.lastSaleDate) > FIFTEEN_DAYS_MS)
+  //       .sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
+
+  //     // Yangi: to'liq filtrlangan statistika
+  //     const totalCustomers = result.length;
+  //     const totalQarzdorAmount = result
+  //       .filter(c => c.balansStatus === "Qarzdor")
+  //       .reduce((sum, c) => sum + (c.balans || 0), 0);
+  //     const totalHaqdorAmount = result
+  //       .filter(c => c.balansStatus === "Haqdor")
+  //       .reduce((sum, c) => sum + (c.balans || 0), 0);
+
+  //     // Pagination oldSales
+  //     const paginatedOldSales = oldSales.slice((page - 1) * limit, page * limit);
+
+  //     return response.success(res, "Tanlangan oyning faol savdolar ro‘yxati", {
+  //       recentSales,
+  //       oldSales: paginatedOldSales,
+  //       totalOldSalesCount: oldSales.length, // To'liq old soni (filtrlangan)
+  //       totalCustomers,
+  //       totalQarzdorAmount,
+  //       totalHaqdorAmount,
+  //     });
+
+  //   } catch (err) {
+  //     return response.serverError(res, "Server xatosi", err.message);
+  //   }
+  // }
+  // Backend: Updated getFilteredSales method
   async getFilteredSales(req, res) {
     try {
-      // Barcha customerlarni topish
-      const customers = await Customer.find().lean();
-      if (!customers || customers.length === 0) {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 15;
+      const search = req.query.search || ''; // Uncommented: search parametri
+      console.log(`getFilteredSales: page=${req.query.page}, limit=${req.query.limit}, search=${search}`);
+
+      let customers = await Customer.find().lean();
+      if (!customers.length) {
         return response.notFound(res, "Mijozlar topilmadi", []);
       }
 
-      // Har bir customer uchun sales tarixini olish
+      // Yangi: search bo'lsa, mijozlarni filtrla (name va phone bo'yicha)
+      let filteredCustomers = customers;
+      if (search) {
+        filteredCustomers = customers.filter(c =>
+          c.name.toLowerCase().includes(search.toLowerCase()) ||
+          (c.phone && c.phone.toLowerCase().includes(search.toLowerCase()))
+        );
+      }
+
       const result = await Promise.all(
-        customers.map(async (customer) => {
+        filteredCustomers.map(async (customer) => {
           const sales = await Salecart.find({ customerId: customer._id })
             .populate("customerId", "name type phone company balans")
+            .sort({ createdAt: -1 })
             .lean();
 
-          // Shu customerga tegishli barcha to‘lovlar
-          const expenses = await Expense.find({
-            relatedId: customer._id,
-          }).lean();
+          const expenses = await Expense.find({ relatedId: customer._id }).lean();
 
-          // 🔥 Umuman yuborilmagan yoki qisman yuborilgan mahsulotlarni hisoblash
           let totalUndelivered = 0;
           const groupedDeliveredItems = {};
           sales.forEach((sale) => {
             sale.items.forEach((item) => {
-              // Shu mahsulotdan qancha yetkazilganligini topamiz
               const delivered = sale.deliveredItems
                 .filter((d) => String(d.productId) === String(item.productId))
                 .reduce((sum, d) => sum + (d.deliveredQuantity || 0), 0);
-
               const remaining = item.quantity - delivered;
-              if (remaining > 0) {
-                totalUndelivered += remaining; // qolgan mahsulotlarni qo‘shamiz
-              }
+              if (remaining > 0) totalUndelivered += remaining;
             });
 
-            // 🔥 deliveryDate bo'yicha guruhlash
-            sale.deliveredItems.forEach((deliveredItem) => {
-              // deliveryDate ni YYYY-MM-DD formatiga aylantirish
-              const dateKey = new Date(deliveredItem.deliveryDate)
-                .toISOString()
-                .slice(0, 13); // sana va soat (2025-08-28T06)
-
-              if (!groupedDeliveredItems[dateKey]) {
-                groupedDeliveredItems[dateKey] = [];
-              }
-              groupedDeliveredItems[dateKey].push(deliveredItem);
+            sale.deliveredItems.forEach((d) => {
+              const dateKey = new Date(d.deliveryDate).toISOString().slice(0, 13);
+              if (!groupedDeliveredItems[dateKey]) groupedDeliveredItems[dateKey] = [];
+              groupedDeliveredItems[dateKey].push(d);
             });
           });
 
-          // Balansni tekshirish va status berish
           let balansStatus = "0";
-          if (customer.balans > 0) {
-            balansStatus = `Qarzdor`;
-          } else if (customer.balans < 0) {
-            balansStatus = `Haqdor`;
-          } else {
-            balansStatus = "Mavjud emas";
-          }
+          if (customer.balans > 0) balansStatus = "Qarzdor";
+          else if (customer.balans < 0) balansStatus = "Haqdor";
+          else balansStatus = "Mavjud emas";
 
-          // Savdo va To‘lovlarni bitta massivga qo‘shamiz
-          const history = [
-            ...sales.map((s) => ({
-              ...s,
-              _type: "sale",
-              date: s.createdAt,
-            })),
-          ].sort((a, b) => new Date(b.date) - new Date(a.date)); // eng oxirgi savdo oldinda
-
-          const Expenses = [
-            ...expenses.map((e) => ({
-              ...e,
-              date: e.date,
-            })),
-          ].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-          // ❗ Har bir customer uchun eng oxirgi savdo sanasini olish
-          const lastSaleDate = sales.length
-            ? new Date(Math.max(...sales.map((s) => new Date(s.createdAt))))
-            : null;
+          const lastSaleDate = sales.length ? new Date(sales[0].createdAt) : null;
 
           return {
             ...customer,
             balansStatus,
             history: sales,
-            Expenses,
+            Expenses: expenses,
             totalUndelivered,
-            lastSaleDate, // 🔥 bu bilan sort qilamiz
-            groupedDeliveredItems, // 🔥 Guruhlangan deliveredItems (sana va soat)
+            lastSaleDate,
+            groupedDeliveredItems,
           };
         })
       );
 
-      // ❗ Customerslarni oxirgi savdo sanasiga qarab sort qilish (eng yangisi oldinda)
-      result.sort((a, b) => {
-        if (!a.lastSaleDate) return 1; // agar savdosi bo‘lmasa pastga tushadi
-        if (!b.lastSaleDate) return -1;
-        return new Date(b.lastSaleDate) - new Date(a.lastSaleDate);
+      const now = new Date();
+      const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+
+      const recentSales = result.filter(c => {
+        if (!c.lastSaleDate) return false;
+        return now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS;
       });
 
-      // Yakuniy data
-      return response.success(
-        res,
-        "Tanlangan oyning faol savdolar ro‘yxati",
-        result
-      );
+      let oldSales = result
+        .filter(c => !c.lastSaleDate || now - new Date(c.lastSaleDate) > FIFTEEN_DAYS_MS)
+        .sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
+
+      // Yangi: to'liq filtrlangan statistika (search va pagination ga qaramay to'liq hisoblanadi)
+      const totalCustomers = result.length;
+      const totalQarzdorAmount = result
+        .filter(c => c.balansStatus === "Qarzdor")
+        .reduce((sum, c) => sum + (c.balans || 0), 0);
+      const totalHaqdorAmount = result
+        .filter(c => c.balansStatus === "Haqdor")
+        .reduce((sum, c) => sum + (c.balans || 0), 0);
+
+      // Pagination oldSales (faqat oldSales uchun)
+      const paginatedOldSales = oldSales.slice((page - 1) * limit, page * limit);
+
+      return response.success(res, "Tanlangan oyning faol savdolar ro‘yxati", {
+        recentSales,
+        oldSales: paginatedOldSales,
+        totalOldSalesCount: oldSales.length, // To'liq old soni (filtrlangan)
+        totalCustomers, // To'liq mijozlar soni (search ga qarab)
+        totalQarzdorAmount, // To'liq qarzdor summasi (search ga qarab)
+        totalHaqdorAmount, // To'liq haqdor summasi (search ga qarab)
+      });
+
     } catch (err) {
       return response.serverError(res, "Server xatosi", err.message);
     }
   }
+
+  async getUndeliveredItems(req, res) {
+    try {
+      const { customerId } = req.params;
+
+      const sales = await Salecart.find({ customerId }).lean();
+
+      if (!sales || sales.length === 0) {
+        return response.notFound(res, "Sotuvlar topilmadi", { overallResult: [] });
+      }
+
+      const allOrders = sales.flatMap(sale =>
+        (sale.items || []).map(item => ({
+          productId: item.productId.toString(),
+          productName: item.productName,
+          quantity: item.quantity,
+          discountedPrice: item.discountedPrice,
+          size: item.size,
+        }))
+      );
+
+      const allDelivered = sales.flatMap(sale =>
+        (sale.deliveredItems || []).map(del => ({
+          productId: del.productId.toString(),
+          productName: del.productName,
+          deliveredQuantity: del.deliveredQuantity,
+          discountedPrice: del.discountedPrice,
+          size: del.size,
+        }))
+      );
+
+      // ===== JAMLAB OLISh =====
+      // JAMLAB OLISh
+      const grouped = {};
+
+      // 1. Buyurtmalarni jamlash
+      allOrders.forEach(item => {
+        const key = item.productId.toString();
+        if (!grouped[key]) {
+          grouped[key] = {
+            productName: item.productName,
+            productId: item.productId,
+            ordered: 0,
+            delivered: 0,
+            discountedPrice: item.discountedPrice,
+            size: item.size
+          };
+        }
+        grouped[key].ordered += item.quantity;
+      });
+
+      // 2. Yuborilganlarni jamlash
+      allDelivered.forEach(del => {
+        const key = del.productId.toString();
+        if (!grouped[key]) {
+          grouped[key] = {
+            productName: del.productName,
+            productId: del.productId,
+            ordered: 0,
+            delivered: 0,
+            discountedPrice: del.discountedPrice,
+            size: del.size
+          };
+        }
+        grouped[key].delivered += del.deliveredQuantity;
+      });
+
+      // 3. Qoldiqni hisoblash
+      const finalResult = Object.values(grouped).map(item => ({
+        productName: item.productName,
+        productId: item.productId,
+        ordered: item.delivered,          // buyurtma qilingan jami
+        delivered: item.ordered,      // jami yuborilgan
+        remaining: item.delivered - item.ordered,
+        discountedPrice: item.discountedPrice,
+        size: item.size
+      })).filter(item => item.remaining > 0);  // remaining 0 bo'lganlarni olib tashlash
+
+      return response.success(res, "Qoldiq mahsulotlar ro'yxati", { overallResult: finalResult });
+
+    } catch (error) {
+      return response.serverError(res, "Server xatosi", error.message);
+    }
+  }
+
   // Process product returns
   async returnItems(req, res) {
     let session;
