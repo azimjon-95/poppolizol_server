@@ -3,7 +3,7 @@ const { Product, Factory, AdditionExpen } = require("../model/factoryModel");
 const ProductNorma = require("../model/productNormaSchema");
 const FinishedProduct = require("../model/finishedProductModel");
 const Admins = require("../model/adminModel");
-const moment = require('moment');
+const moment = require("moment");
 const { Salecart, Customer } = require("../model/saleCartSchema");
 const Expense = require("../model/expenseModel");
 const ProductionHistory = require("../model/ProductionHistoryModel");
@@ -145,7 +145,12 @@ class ProductionSystem {
       const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
       const totalGasCost = totalGasUsed * gasCostPerKWH;
 
+
       const periodExpense = parseFloat((utilities.periodExpense || 0).toFixed(2));
+
+      // Parse period expense
+      // const periodExpense = parseFloat((utilities.periodExpense || 0).toFixed(2));
+      // >>>>>>> eb6d9d600a7d8346974d239d7f9efd710279b8f4
 
       // ✅ Materiallar sarfi
       const materialsUsed = [];
@@ -430,8 +435,6 @@ class ProductionSystem {
         },
         { $sort: { totalSold: -1 } }, // eng ko‘p sotilganidan eng kamigacha
       ]);
-
-
 
       // 2) finishedProduct va materialni olish
       const products = await FinishedProduct.find().lean();
@@ -1036,8 +1039,6 @@ class ProductionSystem {
     }
   }
 
-
-
   async getTopProductsByMonth(req, res) {
     try {
       let { monthYear } = req.query; // front-enddan "YYYY-MM" keladi
@@ -1069,7 +1070,7 @@ class ProductionSystem {
       return response.success(
         res,
         "Top mahsulotlar muvaffaqiyatli olindi",
-        topProducts,
+        topProducts
       );
     } catch (error) {
       return response.serverError(

@@ -275,7 +275,6 @@ const handleOverpaymentInternal = async (
 
     return nextMonthSalary;
   } catch (error) {
-    console.error("Handle overpayment internal error:", error);
     throw error;
   }
 };
@@ -306,7 +305,6 @@ class SalaryService {
         penalties,
       });
     } catch (error) {
-      console.error("Get employee salary info error:", error);
       return response.serverError(
         res,
         "Oylik ma'lumotlarini olishda xatolik",
@@ -364,7 +362,6 @@ class SalaryService {
         }
       );
     } catch (error) {
-      console.error("Get all employees salary info error:", error);
       return response.serverError(
         res,
         "Barcha oylik ma'lumotlarini olishda xatolik",
@@ -398,7 +395,6 @@ class SalaryService {
 
       return response.success(res, "Ishchi jarimalari", penalties);
     } catch (error) {
-      console.error("Get employee penalties error:", error);
       return response.serverError(res, "Jarimalarni olishda xatolik", error);
     }
   }
@@ -518,7 +514,6 @@ class SalaryService {
       });
     } catch (error) {
       await session.abortTransaction();
-      console.error("Pay salary error:", error);
       return response.serverError(res, "Maosh to'lashda xatolik", error);
     } finally {
       session.endSession();
@@ -571,7 +566,6 @@ class SalaryService {
         result
       );
     } catch (error) {
-      console.error("Handle overpayment error:", error);
       return response.serverError(
         res,
         "Ortiqcha to'lovni o'tkazishda xatolik",
@@ -695,7 +689,6 @@ class SalaryService {
 
       return response.success(res, "Jarima muvaffaqiyatli qo'shildi", penalty);
     } catch (error) {
-      console.error("Add penalty error:", error);
       return response.serverError(res, "Jarima qo'shishda xatolik", error);
     }
   }
@@ -746,7 +739,6 @@ class SalaryService {
         },
       });
     } catch (error) {
-      console.error("Get monthly salary report error:", error);
       return response.serverError(
         res,
         "Oylik hisobotini olishda xatolik",
@@ -803,7 +795,6 @@ class SalaryService {
 
       return response.success(res, "Oylik hisobot", checklist);
     } catch (error) {
-      console.error("Get employee finance history error:", error);
       return response.serverError(
         res,
         "Oylik hisobotini olishda xatolik",
