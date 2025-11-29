@@ -149,6 +149,8 @@ class FirmService {
     async getAll(req, res) {
         try {
             const firms = await Firm.find().populate("products");
+            console.log(firms);
+
             return response.success(res, "Firmalar muvaffaqiyatli o'qildi", firms);
         } catch (error) {
             return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });

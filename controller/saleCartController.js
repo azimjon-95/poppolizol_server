@@ -779,112 +779,11 @@ class SaleController {
     }
   }
 
-  // async getFilteredSales(req, res) {
-  //   try {
-  //     const page = parseInt(req.query.page) || 1;
-  //     const limit = parseInt(req.query.limit) || 15;
-  //     // const search = req.query.search || ''; // Yangi: search parametri
-  //     // console.log(`getFilteredSales: page=${req.query.page}, limit=${req.query.limit}, search=${search}`);
-
-  //     let customers = await Customer.find().lean();
-  //     if (!customers.length) {
-  //       return response.notFound(res, "Mijozlar topilmadi", []);
-  //     }
-
-  //     // Yangi: search bo'lsa, mijozlarni filtrla
-  //     let filteredCustomers = customers;
-
-
-  //     const result = await Promise.all(
-  //       filteredCustomers.map(async (customer) => {
-  //         const sales = await Salecart.find({ customerId: customer._id })
-  //           .populate("customerId", "name type phone company balans")
-  //           .sort({ createdAt: -1 })
-  //           .lean();
-
-  //         const expenses = await Expense.find({ relatedId: customer._id }).lean();
-
-  //         let totalUndelivered = 0;
-  //         const groupedDeliveredItems = {};
-  //         sales.forEach((sale) => {
-  //           sale.items.forEach((item) => {
-  //             const delivered = sale.deliveredItems
-  //               .filter((d) => String(d.productId) === String(item.productId))
-  //               .reduce((sum, d) => sum + (d.deliveredQuantity || 0), 0);
-  //             const remaining = item.quantity - delivered;
-  //             if (remaining > 0) totalUndelivered += remaining;
-  //           });
-
-  //           sale.deliveredItems.forEach((d) => {
-  //             const dateKey = new Date(d.deliveryDate).toISOString().slice(0, 13);
-  //             if (!groupedDeliveredItems[dateKey]) groupedDeliveredItems[dateKey] = [];
-  //             groupedDeliveredItems[dateKey].push(d);
-  //           });
-  //         });
-
-  //         let balansStatus = "0";
-  //         if (customer.balans > 0) balansStatus = "Qarzdor";
-  //         else if (customer.balans < 0) balansStatus = "Haqdor";
-  //         else balansStatus = "Mavjud emas";
-
-  //         const lastSaleDate = sales.length ? new Date(sales[0].createdAt) : null;
-
-  //         return {
-  //           ...customer,
-  //           balansStatus,
-  //           history: sales,
-  //           Expenses: expenses,
-  //           totalUndelivered,
-  //           lastSaleDate,
-  //           groupedDeliveredItems,
-  //         };
-  //       })
-  //     );
-
-  //     const now = new Date();
-  //     const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
-
-  //     const recentSales = result.filter(c => {
-  //       if (!c.lastSaleDate) return false;
-  //       return now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS;
-  //     });
-
-  //     let oldSales = result
-  //       .filter(c => !c.lastSaleDate || now - new Date(c.lastSaleDate) > FIFTEEN_DAYS_MS)
-  //       .sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
-
-  //     // Yangi: to'liq filtrlangan statistika
-  //     const totalCustomers = result.length;
-  //     const totalQarzdorAmount = result
-  //       .filter(c => c.balansStatus === "Qarzdor")
-  //       .reduce((sum, c) => sum + (c.balans || 0), 0);
-  //     const totalHaqdorAmount = result
-  //       .filter(c => c.balansStatus === "Haqdor")
-  //       .reduce((sum, c) => sum + (c.balans || 0), 0);
-
-  //     // Pagination oldSales
-  //     const paginatedOldSales = oldSales.slice((page - 1) * limit, page * limit);
-
-  //     return response.success(res, "Tanlangan oyning faol savdolar ro‘yxati", {
-  //       recentSales,
-  //       oldSales: paginatedOldSales,
-  //       totalOldSalesCount: oldSales.length, // To'liq old soni (filtrlangan)
-  //       totalCustomers,
-  //       totalQarzdorAmount,
-  //       totalHaqdorAmount,
-  //     });
-
-  //   } catch (err) {
-  //     return response.serverError(res, "Server xatosi", err.message);
-  //   }
-  // }
-  // Backend: Updated getFilteredSales method
   async getFilteredSales(req, res) {
     try {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 15;
       const search = req.query.search || ''; // Uncommented: search parametri
-      console.log(`getFilteredSales: page=${req.query.page}, limit=${req.query.limit}, search=${search}`);
 
       let customers = await Customer.find().lean();
       if (!customers.length) {

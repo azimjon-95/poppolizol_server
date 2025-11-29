@@ -12,227 +12,6 @@ const mongoose = require("mongoose");
 const response = require("../utils/response");
 
 class MaterialService {
-  // async handleNewIncome(req, res) {
-  //     try {
-  //         const {
-  //             firm: firmData,
-  //             materials: materialsList,
-  //             price,
-  //             paymentType,
-  //             vatPercentage,
-  //             totalTransportCost,
-  //             totalWithVat,
-  //             totalWithoutVat,
-  //             totalWorkerCost,
-  //             customerTransport,
-  //             vatAmount,
-  //             workerPayments,
-  //             debtPayment
-  //         } = req.body;
-
-  //         // Validation
-  //         if (!firmData?._id || !mongoose.isValidObjectId(firmData._id) || !Array.isArray(materialsList) || materialsList.length === 0) {
-  //             return response.error(res, "Firma ID noto‘g‘ri yoki materiallar to‘liq kiritilishi kerak");
-  //         }
-
-  //         // Find existing firm by _id
-  //         const transport = await Transport.findOne({ transport: customerTransport });
-
-  //         const firm = await Firm.findById(firmData._id);
-  //         if (!firm) {
-  //             return response.error(res, "Firma topilmadi");
-  //         }
-
-  //         // Prepare firm data for embedding
-  //         const firmSubdocument = {
-  //             name: firm.name,
-  //             phone: firm.phone || null,
-  //             address: firm.address || null
-  //         };
-
-  //         // Prepare materials and calculate total
-  //         const incomeMaterials = [];
-  //         let calculatedTotalWithoutVat = 0;
-  //         const materialUpdates = [];
-  //         const newMaterials = [];
-
-  //         for (const item of materialsList) {
-  //             if (!item.name || !item.quantity || !item.price || !item.currency || !item.unit) {
-  //                 return response.error(res, "Material ma'lumotlari to‘liq emas");
-  //             }
-
-  //             calculatedTotalWithoutVat += item.price * item.quantity;
-
-  //             const materialData = {
-  //                 category: item.category || null,
-  //                 currency: item.currency,
-  //                 name: item.name,
-  //                 price: item.price,
-  //                 quantity: item.quantity,
-  //                 transportCostPerUnit: item.transportCostPerUnit || 0,
-  //                 unit: item.unit,
-  //                 workerCostPerUnit: item.workerCostPerUnit || 0,
-  //             };
-
-  //             // Check for existing material
-  //             const existingMaterial = await Material.findOne({ name: item.name }).lean();
-  //             if (existingMaterial) {
-  //                 const totalQty = existingMaterial.quantity + item.quantity;
-  //                 const newPrice = Math.max(existingMaterial.avgPrice, item.price);
-
-  //                 materialUpdates.push({
-  //                     updateOne: {
-  //                         filter: { _id: existingMaterial._id },
-  //                         update: { quantity: totalQty, avgPrice: newPrice },
-  //                     },
-  //                 });
-  //                 materialData.material = existingMaterial._id;
-  //             } else {
-  //                 newMaterials.push({
-  //                     name: item.name,
-  //                     unit: item.unit,
-  //                     quantity: item.quantity,
-  //                     price: item.price,
-  //                     currency: item.currency,
-  //                     category: item.category || null,
-  //                     avgPrice: item.price
-  //                 });
-  //                 materialData.material = null;
-  //             }
-
-  //             incomeMaterials.push(materialData);
-  //         }
-
-  //         // Execute bulk operations for materials
-  //         if (materialUpdates.length > 0) {
-  //             await Material.bulkWrite(materialUpdates);
-  //         }
-  //         if (newMaterials.length > 0) {
-  //             const createdMaterials = await Material.insertMany(newMaterials);
-  //             let newMaterialIndex = 0;
-  //             incomeMaterials.forEach((im) => {
-  //                 if (!im.material) {
-  //                     im.material = createdMaterials[newMaterialIndex]._id;
-  //                     newMaterialIndex++;
-  //                 }
-  //             });
-  //         }
-
-  //         // Validate workerPayments
-  //         if (workerPayments && Array.isArray(workerPayments)) {
-  //             for (const payment of workerPayments) {
-  //                 if (!payment.workerId || !payment.payment) {
-  //                     return response.error(res, "Ishchi to‘lovlari ma'lumotlari to‘liq emas");
-  //                 }
-  //             }
-  //         }
-
-  //         // Calculate financials
-  //         const finalVatPercentage = vatPercentage || 0;
-  //         const finalVatAmount = vatAmount || (calculatedTotalWithoutVat * finalVatPercentage) / 100;
-  //         const finalTotalWithVat = totalWithVat || calculatedTotalWithoutVat + finalVatAmount;
-  //         const finalTotalWithoutVat = totalWithoutVat || calculatedTotalWithoutVat;
-  //         const finalTotalTransportCost = totalTransportCost || materialsList.reduce((sum, item) => sum + (item.transportCostPerUnit || 0) * item.quantity, 0);
-  //         const finalTotalWorkerCost = totalWorkerCost || materialsList.reduce((sum, item) => sum + (item.workerCostPerUnit || 0) * item.quantity, 0);
-  //         const finalPrice = price || 0;
-
-  //         // Handle prepaid (negative debt)
-  //         const oldDebt = firm.debt || 0;
-  //         let creditUsed = 0;
-  //         if (oldDebt < 0) {
-  //             creditUsed = Math.min(-oldDebt, finalTotalWithoutVat - finalPrice);
-  //         }
-
-  //         // Calculate debt for Firm schema (totalWithoutVat - finalPrice). Note: creditUsed is not subtracted here for correct accounting.
-  //         const debtDifference = finalTotalWithoutVat - finalPrice;
-  //         await Firm.findByIdAndUpdate(
-  //             firmData._id,
-  //             { $inc: { debt: debtDifference } },
-  //             { new: true }
-  //         );
-
-  //         // Initialize debt for Income schema
-  //         const debt = {
-  //             initialAmount: finalTotalWithVat,
-  //             remainingAmount: finalTotalWithVat - finalPrice,
-  //             status: finalTotalWithVat - finalPrice <= 0 ? 'fully_paid' : finalPrice > 0 ? 'partially_paid' : 'pending',
-  //             debtPayments: []
-  //         };
-
-  //         // Handle prepaid as a payment
-  //         if (creditUsed > 0) {
-  //             if (creditUsed > debt.remainingAmount) {
-  //                 return response.error(res, "Kredit ishlatish summasi qolgan qarzdan oshib ketdi");
-  //             }
-  //             debt.debtPayments.push({
-  //                 amount: creditUsed,
-  //                 paymentMethod: 'advance',
-  //                 note: 'Oldindan to‘lovdan ishlatildi',
-  //                 paymentDate: new Date()
-  //             });
-  //             debt.remainingAmount -= creditUsed;
-  //             debt.status = debt.remainingAmount === 0 ? 'fully_paid' : 'partially_paid';
-  //         }
-
-  //         // Handle initial debt payment (assuming this is for cash or other initial payment details)
-  //         if (debtPayment && debtPayment.amount && debtPayment.paymentMethod) {
-  //             if (!['naqt', 'bank'].includes(debtPayment.paymentMethod)) {
-  //                 return response.error(res, "Noto‘g‘ri to‘lov usuli");
-  //             }
-  //             if (debtPayment.amount > debt.remainingAmount) {
-  //                 return response.error(res, "To‘lov summasi qolgan qarzdan oshib ketdi");
-  //             }
-  //             debt.debtPayments.push({
-  //                 amount: debtPayment.amount,
-  //                 paymentMethod: debtPayment.paymentMethod,
-  //                 note: debtPayment.note || '',
-  //                 paymentDate: new Date()
-  //             });
-  //             debt.remainingAmount -= debtPayment.amount;
-  //             debt.status = debt.remainingAmount === 0 ? 'fully_paid' : 'partially_paid';
-  //         }
-
-  //         // Create single income record. Note: price in income is cash + creditUsed for display.
-  //         const effectivePrice = finalPrice + creditUsed;
-  //         const income = await Income.create({
-  //             firm: firmSubdocument, // Embedded firm data
-  //             firmId: firmData._id, // Reference to Firm document
-  //             materials: incomeMaterials,
-  //             price: effectivePrice,
-  //             paymentType: paymentType || null,
-  //             vatPercentage: finalVatPercentage,
-  //             totalTransportCost: finalTotalTransportCost,
-  //             totalWithVat: finalTotalWithVat,
-  //             totalWithoutVat: finalTotalWithoutVat,
-  //             totalWorkerCost: finalTotalWorkerCost,
-  //             vatAmount: finalVatAmount,
-  //             workerPayments: workerPayments || [],
-  //             debt,
-  //             date: new Date(),
-  //         });
-
-  //         // Update Firm debt
-  //         if (totalTransportCost > 0) {// Only update if transport cost is not zero
-  //             if (transport) {
-  //                 await Transport.findByIdAndUpdate(
-  //                     transport._id,
-  //                     { $inc: { balance: debtDifference } }, // mavjud summaga qo‘shadi
-  //                     { new: true }
-  //                 );
-  //             } else {
-  //                 // ceate Firm
-  //                 await Transport.create({
-  //                     transport: customerTransport,
-  //                     balance: debtDifference
-  //                 });
-  //             }
-  //         }
-
-  //         return response.created(res, "Kirim muvaffaqiyatli qo‘shildi", income);
-  //     } catch (error) {
-  //         return response.serverError(res, "Serverda xatolik yuz berdi", { error: error.message });
-  //     }
-  // }
   async handleNewIncome(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -414,8 +193,8 @@ class MaterialService {
           finalTotalWithVat - finalPrice <= 0
             ? "fully_paid"
             : finalPrice > 0
-            ? "partially_paid"
-            : "pending",
+              ? "partially_paid"
+              : "pending",
         debtPayments: [],
       };
 
@@ -430,7 +209,7 @@ class MaterialService {
         }
         debt.debtPayments.push({
           amount: creditUsed,
-          paymentMethod: "advance",
+          paymentMethod: paymentType,
           note: "Oldindan to‘lovdan ishlatildi",
           paymentDate: new Date(),
         });
@@ -540,6 +319,7 @@ class MaterialService {
     try {
       const firms = await Firm.find();
 
+
       return response.success(res, "Firmalar muvaffaqiyatli o'qildi", firms);
     } catch (error) {
       return response.serverError(res, "Serverda xatolik yuz berdi", {
@@ -551,31 +331,71 @@ class MaterialService {
   //Income
   async getIncomes(req, res) {
     try {
-      const { month } = req.query;
-      if (!month || !/^\d{2}\.\d{4}$/.test(month)) {
-        return response.error(
-          res,
-          "Noto‘g‘ri yoki yetishmayotgan 'month' parametri (MM.YYYY)"
-        );
-      }
-
-      const startDate = moment(month, "MM.YYYY").startOf("month").toDate();
-      const endDate = moment(month, "MM.YYYY").endOf("month").toDate();
-
-      const incomes = await Income.find({
-        createdAt: { $gte: startDate, $lte: endDate },
-      })
+      const incomes = await Income.find()
         .populate("workerPayments.workerId")
         .sort({ createdAt: -1 });
-      // .populate('materials.material')
+      // Firm
+      const firms = await Firm.find();
+      const grouped = {};
 
-      return response.success(res, "Kirimlar muvaffaqiyatli o'qildi", incomes);
+      incomes.forEach((income) => {
+        const firmId = income.firmId.toString();
+
+        if (!grouped[firmId]) {
+          grouped[firmId] = {
+            firmId: income.firmId,
+            name: income.firm.name,
+            phone: income.firm.phone,
+            address: income.firm.address,
+            totalDebt: 0,
+            totalPaid: 0,
+            history: [],
+          };
+        }
+
+        // History arrayiga qo‘shish
+        grouped[firmId].history.push({
+          incomeId: income._id,
+          date: income.date,
+          totalWithVat: income.totalWithVat,
+          totalWithoutVat: income.totalWithoutVat,
+          paymentType: income.paymentType,
+          vatPercentage: income.vatPercentage,
+          materials: income.materials.map((m) => ({
+            name: m.name,
+            quantity: m.quantity,
+            price: m.price,
+            paid: m.paid, // agar mavjud bo‘lsa
+          })),
+          debtStatus: income.debt.status,
+          workerPayments: income.workerPayments.map((wp) => ({
+            workerId: wp.workerId,
+            amount: wp.amount,
+          })),
+        });
+      });
+
+      // Objectni arrayga aylantirish va firm debt bilan yangilash
+      const result = Object.values(grouped).map(group => {
+        const firm = firms.find(f => f._id.toString() === group.firmId.toString());
+        if (firm) {
+          const totalAmount = group.history.reduce((sum, h) => sum + h.totalWithVat, 0);
+          group.totalDebt = firm.debt || 0;
+          group.totalPaid = totalAmount - firm.debt;
+          // Address ni ham yangilash, agar kerak bo'lsa
+          group.address = firm.address || group.address;
+        }
+        return group;
+      });
+
+      return response.success(res, "Firmalar bo‘yicha guruhlangan kirimlar", result);
     } catch (error) {
       return response.serverError(res, "Serverda xatolik yuz berdi", {
         error: error.message,
       });
     }
   }
+
 
   // Tuzatilgan payDebtIncom funksiyasi - Alternativ yondashuv
   async payDebtIncom(req, res) {
@@ -663,9 +483,8 @@ class MaterialService {
           paymentMethod: debtPayment.paymentMethod,
           category: "Qarz to'lovi",
           amount: debtPayment.amount,
-          description: `Kirim material uchun qarz to'lovi - ${
-            income.firm?.name || "Noma'lum firma"
-          }`,
+          description: `Kirim material uchun qarz to'lovi - ${income.firm?.name || "Noma'lum firma"
+            }`,
           date: new Date(),
         });
 
