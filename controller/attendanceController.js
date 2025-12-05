@@ -135,14 +135,16 @@ class AttendanceController {
             employee: employeeId,
             date: new Date(date),
             percentage: realPercentage,
-            unit: user.unit,
+            // unit: user.unit,
+            unit,
           },
           { upsert: true, new: true, session }
         );
         if (!cleaning) {
           let unitForSalary = user.unit.includes("rubiroid")
             ? "ruberoid"
-            : user.unit;
+            : // : user.unit;
+              unit;
 
           await reCalculateGlobalSalaries(unitForSalary, date, session);
           await calculateLoadedPrices(date, session);
