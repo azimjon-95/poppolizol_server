@@ -805,6 +805,7 @@ class SaleController {
             .populate("customerId", "name type phone company balans")
             .sort({ createdAt: -1 })
             .lean();
+          sales.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
           const expenses = await Expense.find({ relatedId: customer._id }).lean();
 
@@ -848,11 +849,12 @@ class SaleController {
       const now = new Date();
       const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 
-      const recentSales = result.filter(c => {
-        if (!c.lastSaleDate) return false;
-        return now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS;
-      });
+      // recentSales: oxirgi 15 kun ichida savdosi bo‘lgan mijozlar
+      const recentSales = result
+        .filter(c => c.lastSaleDate && now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS)
+        .sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate)); // eng yangi tepada
 
+      // oldSales: 15 kundan eski yoki savdosi bo‘lmagan mijozlar
       let oldSales = result
         .filter(c => !c.lastSaleDate || now - new Date(c.lastSaleDate) > FIFTEEN_DAYS_MS)
         .sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
