@@ -849,15 +849,21 @@ class SaleController {
       const now = new Date();
       const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 
-      // recentSales: oxirgi 15 kun ichida savdosi bo‘lgan mijozlar
-      const recentSales = result
-        .filter(c => c.lastSaleDate && now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS)
-        .sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate)); // eng yangi tepada
+      let recentSales = [];
+      let oldSales = [];
 
-      // oldSales: 15 kundan eski yoki savdosi bo‘lmagan mijozlar
-      let oldSales = result
-        .filter(c => !c.lastSaleDate || now - new Date(c.lastSaleDate) > FIFTEEN_DAYS_MS)
-        .sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
+      // Ajratish: faqat 1 martta loop
+      for (const c of result) {
+        if (c.lastSaleDate && (now - new Date(c.lastSaleDate)) <= FIFTEEN_DAYS_MS) {
+          recentSales.push(c);   // oxirgi 15 kun ichidagi mijozlar
+        } else {
+          oldSales.push(c);      // eski yoki savdosi bo‘lmaganlar
+        }
+      }
+
+      // Sort — bittadan chaqiriladi
+      recentSales.sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
+      oldSales.sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
 
       // Yangi: to'liq filtrlangan statistika (search va pagination ga qaramay to'liq hisoblanadi)
       const totalCustomers = result.length;
