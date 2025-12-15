@@ -104,17 +104,14 @@ const getEmployeeSalaryInfoInternal = async (
       date: { $gte: startDate, $lte: endDate },
     });
 
-    // productionSalary = salaryRecords.reduce((sum, record) => {
-    //   const empEntries = record.workers.filter(
-    //     (w) => w.employee.toString() === employee._id.toString()
-    //   );
-    //   return sum + empEntries.reduce((s, w) => s + (w.amount || 0), 0);
-    // }, 0);
     productionSalary = (salaryRecords || []).reduce((sum, record) => {
       const rows = (record?.workers || []).filter(
         (w) => String(w.employee) === String(employee._id)
       );
-      return sum + rows.reduce((s, w) => s + (w.amount || 0), 0);
+      return (
+        sum +
+        rows.reduce((s, w) => s + (w.amount || 0) + (w.amountOfLoaded || 0), 0)
+      );
     }, 0);
   }
 
@@ -140,8 +137,8 @@ const getEmployeeSalaryInfoInternal = async (
     ((employee.paymentType === "ishbay"
       ? productionSalary
       : employee.paymentType === "kunlik"
-        ? dailySalary
-        : employee.salary || 0) || 0) +
+      ? dailySalary
+      : employee.salary || 0) || 0) +
     (unloadingSalary || 0) +
     (bonusSum || 0);
 
@@ -165,11 +162,6 @@ const getEmployeeSalaryInfoInternal = async (
 
     salaryPayment.baseSalary = calculatedBaseSalary;
     salaryPayment.penaltyAmount = totalPenalty;
-    // salaryPayment.remainingAmount =
-    //   calculatedBaseSalary -
-    //   totalPenalty -
-    //   salaryPayment.totalPaid -
-    //   salaryPayment.advanceDebt;
 
     const paid = salaryPayment?.totalPaid || 0;
     const adv = salaryPayment?.advanceDebt || 0;

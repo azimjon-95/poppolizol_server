@@ -10,13 +10,12 @@ class MaterialController {
       }
       return response.success(res, "materialLAR topildi", materials);
     } catch (error) {
-      return response.error(res, error.message, err);
+      return response.error(res, error.message, error);
     }
   }
 
   async create(req, res) {
     try {
-
       const material = await Material.create(req.body);
       if (!material) {
         return response.notFound(res, "Material qo'shilmadi");

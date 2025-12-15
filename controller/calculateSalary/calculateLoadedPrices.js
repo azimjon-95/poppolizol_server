@@ -150,12 +150,17 @@ async function calculateLoadedPrices(date, externalSession) {
           deptPercentage > 0 ? deptLoadAmount / deptPercentage : 0;
 
         // deptLoadAmount ning loadAmount ga nisbatan foizini hisoblash
-        const deptLoadPercentage = deptLoadAmount / loadAmount;
+        // const deptLoadPercentage = deptLoadAmount / loadAmount;
+        const deptLoadPercentage =
+          loadAmount > 0 ? deptLoadAmount / loadAmount : 0;
 
         // item.deliveredQuantity ning o‘sha foizini hisoblash
-        const deptDeliveredQuantity = Math.round(
-          item.deliveredQuantity * deptLoadPercentage
-        );
+        // const deptDeliveredQuantity = Math.round(
+        //   item.deliveredQuantity * deptLoadPercentage
+        // );
+        const deptDeliveredQuantity =
+          Math.round(item.deliveredQuantity * deptLoadPercentage) || 0; // NaN bo'lsa 0 qilib beradi
+
         let salaryRecord = await SalaryRecord.findOne({
           date: { $gte: startOfDay, $lte: endOfDay },
           department: dept,

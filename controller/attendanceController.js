@@ -93,19 +93,19 @@ class AttendanceController {
       today.setHours(0, 0, 0, 0);
       const endOfDay = new Date(today.getTime() + 86399999);
 
-      let cleanSalaryRecord = await SalaryRecord.findOne({
-        date: { $gte: today, $lte: endOfDay },
-        type: "cleaning",
-      });
+      // let cleanSalaryRecord = await SalaryRecord.findOne({
+      //   date: { $gte: today, $lte: endOfDay },
+      //   type: "cleaning",
+      // });
 
-      if (!cleaning && cleanSalaryRecord) {
-        await session.abortTransaction();
-        session.endSession();
-        return response.warning(
-          res,
-          "Bugun shanbalik uchun davomat saqlay olasiz"
-        );
-      }
+      // if (!cleaning && cleanSalaryRecord) {
+      //   await session.abortTransaction();
+      //   session.endSession();
+      //   return response.warning(
+      //     res,
+      //     "Bugun shanbalik uchun davomat saqlay olasiz"
+      //   );
+      // }
 
       let attendanceRecord;
       if (user.unit === "avto kara") {
@@ -136,7 +136,7 @@ class AttendanceController {
             date: new Date(date),
             percentage: realPercentage,
             // unit: user.unit,
-            unit,
+            unit: unit === "rubiroid" ? "ruberoid" : unit,
           },
           { upsert: true, new: true, session }
         );
@@ -172,6 +172,8 @@ class AttendanceController {
                   ? "Okisleniya"
                   : unit.toLowerCase().includes("polizol")
                   ? "polizol"
+                  : unit.toLowerCase().includes("rubiroid")
+                  ? "ruberoid"
                   : unit,
                 totalSum: 120000 * percentage,
                 salaryPerPercent: 120000 * percentage,

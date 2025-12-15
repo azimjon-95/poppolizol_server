@@ -158,8 +158,6 @@ class SaleController {
     }
   }
 
-
-
   async deliverProduct(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -783,7 +781,7 @@ class SaleController {
     try {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 15;
-      const search = req.query.search || ''; // Uncommented: search parametri
+      const search = req.query.search || ""; // Uncommented: search parametri
 
       let customers = await Customer.find().lean();
       if (!customers.length) {
@@ -793,9 +791,10 @@ class SaleController {
       // Yangi: search bo'lsa, mijozlarni filtrla (name va phone bo'yicha)
       let filteredCustomers = customers;
       if (search) {
-        filteredCustomers = customers.filter(c =>
-          c.name.toLowerCase().includes(search.toLowerCase()) ||
-          (c.phone && c.phone.toLowerCase().includes(search.toLowerCase()))
+        filteredCustomers = customers.filter(
+          (c) =>
+            c.name.toLowerCase().includes(search.toLowerCase()) ||
+            (c.phone && c.phone.toLowerCase().includes(search.toLowerCase()))
         );
       }
 
@@ -807,7 +806,9 @@ class SaleController {
             .lean();
           sales.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-          const expenses = await Expense.find({ relatedId: customer._id }).lean();
+          const expenses = await Expense.find({
+            relatedId: customer._id,
+          }).lean();
 
           let totalUndelivered = 0;
           const groupedDeliveredItems = {};
@@ -821,8 +822,11 @@ class SaleController {
             });
 
             sale.deliveredItems.forEach((d) => {
-              const dateKey = new Date(d.deliveryDate).toISOString().slice(0, 13);
-              if (!groupedDeliveredItems[dateKey]) groupedDeliveredItems[dateKey] = [];
+              const dateKey = new Date(d.deliveryDate)
+                .toISOString()
+                .slice(0, 13);
+              if (!groupedDeliveredItems[dateKey])
+                groupedDeliveredItems[dateKey] = [];
               groupedDeliveredItems[dateKey].push(d);
             });
           });
@@ -832,7 +836,9 @@ class SaleController {
           else if (customer.balans < 0) balansStatus = "Haqdor";
           else balansStatus = "Mavjud emas";
 
-          const lastSaleDate = sales.length ? new Date(sales[0].createdAt) : null;
+          const lastSaleDate = sales.length
+            ? new Date(sales[0].createdAt)
+            : null;
 
           return {
             ...customer,
@@ -854,28 +860,38 @@ class SaleController {
 
       // Ajratish: faqat 1 martta loop
       for (const c of result) {
-        if (c.lastSaleDate && (now - new Date(c.lastSaleDate)) <= FIFTEEN_DAYS_MS) {
-          recentSales.push(c);   // oxirgi 15 kun ichidagi mijozlar
+        if (
+          c.lastSaleDate &&
+          now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS
+        ) {
+          recentSales.push(c); // oxirgi 15 kun ichidagi mijozlar
         } else {
-          oldSales.push(c);      // eski yoki savdosi bo‘lmaganlar
+          oldSales.push(c); // eski yoki savdosi bo‘lmaganlar
         }
       }
 
       // Sort — bittadan chaqiriladi
-      recentSales.sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
-      oldSales.sort((a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate));
+      recentSales.sort(
+        (a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate)
+      );
+      oldSales.sort(
+        (a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate)
+      );
 
       // Yangi: to'liq filtrlangan statistika (search va pagination ga qaramay to'liq hisoblanadi)
       const totalCustomers = result.length;
       const totalQarzdorAmount = result
-        .filter(c => c.balansStatus === "Qarzdor")
+        .filter((c) => c.balansStatus === "Qarzdor")
         .reduce((sum, c) => sum + (c.balans || 0), 0);
       const totalHaqdorAmount = result
-        .filter(c => c.balansStatus === "Haqdor")
+        .filter((c) => c.balansStatus === "Haqdor")
         .reduce((sum, c) => sum + (c.balans || 0), 0);
 
       // Pagination oldSales (faqat oldSales uchun)
-      const paginatedOldSales = oldSales.slice((page - 1) * limit, page * limit);
+      const paginatedOldSales = oldSales.slice(
+        (page - 1) * limit,
+        page * limit
+      );
 
       return response.success(res, "Tanlangan oyning faol savdolar ro‘yxati", {
         recentSales,
@@ -885,7 +901,6 @@ class SaleController {
         totalQarzdorAmount, // To'liq qarzdor summasi (search ga qarab)
         totalHaqdorAmount, // To'liq haqdor summasi (search ga qarab)
       });
-
     } catch (err) {
       return response.serverError(res, "Server xatosi", err.message);
     }
@@ -898,11 +913,13 @@ class SaleController {
       const sales = await Salecart.find({ customerId }).lean();
 
       if (!sales || sales.length === 0) {
-        return response.notFound(res, "Sotuvlar topilmadi", { overallResult: [] });
+        return response.notFound(res, "Sotuvlar topilmadi", {
+          overallResult: [],
+        });
       }
 
-      const allOrders = sales.flatMap(sale =>
-        (sale.items || []).map(item => ({
+      const allOrders = sales.flatMap((sale) =>
+        (sale.items || []).map((item) => ({
           productId: item.productId.toString(),
           productName: item.productName,
           quantity: item.quantity,
@@ -911,8 +928,8 @@ class SaleController {
         }))
       );
 
-      const allDelivered = sales.flatMap(sale =>
-        (sale.deliveredItems || []).map(del => ({
+      const allDelivered = sales.flatMap((sale) =>
+        (sale.deliveredItems || []).map((del) => ({
           productId: del.productId.toString(),
           productName: del.productName,
           deliveredQuantity: del.deliveredQuantity,
@@ -926,7 +943,7 @@ class SaleController {
       const grouped = {};
 
       // 1. Buyurtmalarni jamlash
-      allOrders.forEach(item => {
+      allOrders.forEach((item) => {
         const key = item.productId.toString();
         if (!grouped[key]) {
           grouped[key] = {
@@ -935,14 +952,14 @@ class SaleController {
             ordered: 0,
             delivered: 0,
             discountedPrice: item.discountedPrice,
-            size: item.size
+            size: item.size,
           };
         }
         grouped[key].ordered += item.quantity;
       });
 
       // 2. Yuborilganlarni jamlash
-      allDelivered.forEach(del => {
+      allDelivered.forEach((del) => {
         const key = del.productId.toString();
         if (!grouped[key]) {
           grouped[key] = {
@@ -951,25 +968,28 @@ class SaleController {
             ordered: 0,
             delivered: 0,
             discountedPrice: del.discountedPrice,
-            size: del.size
+            size: del.size,
           };
         }
         grouped[key].delivered += del.deliveredQuantity;
       });
 
       // 3. Qoldiqni hisoblash
-      const finalResult = Object.values(grouped).map(item => ({
-        productName: item.productName,
-        productId: item.productId,
-        ordered: item.delivered,          // buyurtma qilingan jami
-        delivered: item.ordered,      // jami yuborilgan
-        remaining: item.delivered - item.ordered,
-        discountedPrice: item.discountedPrice,
-        size: item.size
-      })).filter(item => item.remaining > 0);  // remaining 0 bo'lganlarni olib tashlash
+      const finalResult = Object.values(grouped)
+        .map((item) => ({
+          productName: item.productName,
+          productId: item.productId,
+          ordered: item.ordered, // buyurtma qilingan jami
+          delivered: item.delivered, // jami yuborilgan
+          remaining: item.ordered - item.delivered,
+          discountedPrice: item.discountedPrice,
+          size: item.size,
+        }))
+        .filter((item) => item.remaining > 0); // remaining 0 bo'lganlarni olib tashlash
 
-      return response.success(res, "Qoldiq mahsulotlar ro'yxati", { overallResult: finalResult });
-
+      return response.success(res, "Qoldiq mahsulotlar ro'yxati", {
+        overallResult: finalResult,
+      });
     } catch (error) {
       return response.serverError(res, "Server xatosi", error.message);
     }
