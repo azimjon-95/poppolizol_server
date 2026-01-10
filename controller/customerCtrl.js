@@ -42,6 +42,7 @@ class customerController {
           date,
           amount,
         })),
+        sales,
         expenses,
         totalPayments,
         balans: customer.balans,
