@@ -25,12 +25,10 @@ const itemSchema = new mongoose.Schema({
         trim: true
     },
     rope: {
-        type: mongoose.Schema.Types.Mixed, // Can be string or number
+        type: mongoose.Schema.Types.Mixed,
         required: true,
         validate: {
-            validator: (value) => {
-                return typeof value === 'string' || typeof value === 'number';
-            },
+            validator: (value) => typeof value === 'string' || typeof value === 'number',
             message: 'Rope must be a string or number'
         }
     }
@@ -44,16 +42,57 @@ const inventorySchema = new mongoose.Schema({
         trim: true,
         index: true
     },
+
+    // 🔴 YANGI: Qaynatish jarayoni holati
+    boilingStatus: {
+        type: String,
+        enum: ['pending', 'boiling', 'finished'],
+        default: 'pending',
+        index: true
+    },
+
     date: {
         type: Date,
         required: true,
         index: true
     },
+
+    // 🔴 Qozonga tashlangan vaqt
+    boilingStartTime: {
+        type: Date,
+        index: true
+    },
+
+    // 🔴 Qozondan olingan vaqt
+    boilingEndTime: {
+        type: Date
+    },
+
+    // 🔴 Qaynatish davomiyligi (sekundlarda, avto hisoblanadi)
+    boilingDurationSeconds: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+
     bn5Amount: {
         type: Number,
         required: true,
         min: 0
     },
+
+    // 🔴 BN-5 ni qanday taqsimlangan
+    bn5ForSale: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+    bn5ForMel: {
+        type: Number,
+        min: 0,
+        default: 0
+    },
+
     melAmount: {
         type: Number,
         required: true,
@@ -106,13 +145,24 @@ const inventorySchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// Virtual to calculate total cost
+// Virtual: Umumiy xarajat
 inventorySchema.virtual('totalCost').get(function () {
     return this.bn5Amount + this.melAmount + this.electricity +
         this.gasAmount + this.extra + (this.kraftPaper * this.price);
 });
 
-// Index for common queries
-inventorySchema.index({ date: -1, productionName: 1, 'items.label': 1 });
+// Virtual: Qaynatish davomiyligi matn ko‘rinishida (HH:MM:SS)
+inventorySchema.virtual('boilingDurationFormatted').get(function () {
+    if (!this.boilingDurationSeconds) return '00:00:00';
+    const hours = String(Math.floor(this.boilingDurationSeconds / 3600)).padStart(2, '0');
+    const minutes = String(Math.floor((this.boilingDurationSeconds % 3600) / 60)).padStart(2, '0');
+    const seconds = String(this.boilingDurationSeconds % 60).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+});
+
+// Indexlar: Tez qidiruv uchun
+inventorySchema.index({ boilingStatus: 1, date: -1 });
+inventorySchema.index({ boilingStartTime: -1 });
+inventorySchema.index({ productionName: 1, boilingStatus: 1 });
 
 module.exports = mongoose.model('Inventory', inventorySchema);

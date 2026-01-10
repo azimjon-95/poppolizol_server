@@ -72,32 +72,23 @@ class ProductionSystem {
             "Ofis xarajatlari",
             "Uskuna ta’miri",
             "Internet va aloqa",
-            "exnik xizmat",
+            "texnik xizmat",
             "Eksport xarajatlari",
-            "Yer solig‘i",
             "IT xizmatlar (dasturiy ta’minot)",
             "Qarz to'lovi",
-            "Avans",
             "Kadrlar o‘qitish / trening",
             "Komandirovka xarajatlari",
-            "Suv / kanalizatsiya tizimi xizmatlari",
             "Chiqindilar utilizatsiyasi",
             "Litsenziya va ruxsatnomalar",
             "Texnik xizmat",
             "Reklama xarajatlari",
-            "Transport",
             "Ishlab chiqarish vositalari xaridi",
             "Ofis mebellari va texnikasi",
             "Moliyaviy xizmatlar (bank, auditor)",
-            "Bank xizmatlari",
             "Sud va yuridik xarajatlar",
             "USTA va Qurilish ishlari",
-            "Ish/chik.xarajatlari",
             "Boshqa xarajatlar (Prochi)",
             "Buxgalteriya xizmati",
-            "Soliqlar va majburiy to‘lov",
-            "Avto Qora xarajati",
-            "Oylik maosh",
           ],
         },
         createdAt: { $gte: today, $lt: tomorrow },
@@ -529,6 +520,268 @@ class ProductionSystem {
   }
 
   // 4454
+
+  // // 🔥 QOZONGA TASHLASH – Jarayonni boshlash
+  // async startBoiling(req, res) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+  //   let isCommitted = false;
+
+  //   try {
+  //     const {
+  //       date,
+  //       bn3Amount,
+  //       wasteAmount,
+  //       gasAmount = 0,
+  //       electricity = 0,
+  //       extra = 0,
+  //       price, // 1 kg BN-5 narxi (hisoblangan)
+  //       notes = '',
+  //     } = req.body;
+
+  //     // Majburiy maydonlar validatsiyasi
+  //     if (!date || !bn3Amount || !wasteAmount || !price) {
+  //       return response.error(res, 'Majburiy maydonlar: date, bn3Amount, wasteAmount, price');
+  //     }
+
+  //     const bn3Amt = Number(bn3Amount);
+  //     const wasteAmt = Number(wasteAmount);
+  //     const unitCost = Number(price);
+
+  //     if (isNaN(bn3Amt) || isNaN(wasteAmt) || isNaN(unitCost) || unitCost <= 0) {
+  //       return response.error(res, 'Raqamlar noto‘g‘ri kiritilgan');
+  //     }
+
+  //     const expectedBn5 = bn3Amt - wasteAmt;
+  //     if (expectedBn5 < 0) {
+  //       return response.error(res, 'Chiqindi miqdori BN-3 dan oshib ketdi');
+  //     }
+
+  //     // Allaqachon qaynatilayotgan jarayon bor-yo‘qligini tekshirish
+  //     const activeProcess = await Inventory.findOne({ boilingStatus: 'boiling' }).session(session);
+  //     if (activeProcess) {
+  //       return response.error(res, 'Allaqachon qozonda qaynatish jarayoni mavjud!');
+  //     }
+
+  //     // BN-3 ombordan yetarliligini tekshirish va chiqarish
+  //     const bn3Material = await Material.findOne({ category: 'BN-3' }).session(session);
+  //     if (!bn3Material || bn3Material.quantity < bn3Amt) {
+  //       return response.error(
+  //         res,
+  //         `BN-3 yetarli emas. Mavjud: ${bn3Material?.quantity || 0} kg, Talab: ${bn3Amt} kg`
+  //       );
+  //     }
+
+  //     bn3Material.quantity -= bn3Amt;
+  //     await bn3Material.save({ session });
+
+  //     // Yangi Inventory yozuvi yaratish (qaynatish boshlandi)
+  //     const [inventoryRecord] = await Inventory.create(
+  //       [{
+  //         productionName: 'BN-5',
+  //         date: new Date(date),
+  //         boilingStatus: 'boiling',
+  //         boilingStartTime: new Date(), // hozirgi vaqt
+  //         bn3Amount: bn3Amt,           // saqlaymiz, keyin hisobot uchun foydali
+  //         wasteAmount: wasteAmt,
+  //         bn5Amount: 0,                // hali chiqmagan
+  //         bn5ForSale: 0,
+  //         bn5ForMel: 0,
+  //         melAmount: 0,
+  //         electricity: Number(electricity),
+  //         gasAmount: Number(gasAmount),
+  //         extra: Number(extra),
+  //         price: unitCost,
+  //         notes,
+  //         kraftPaper: 0,
+  //         sellingPrice: 0,
+  //         qop: 0,
+  //         items: [],
+  //       }],
+  //       { session }
+  //     );
+
+  //     // Ishchilarga maosh hisoblash – BN-3 tashlangani uchun
+  //     const startOfDay = new Date(date);
+  //     startOfDay.setHours(0, 0, 0, 0);
+  //     const endOfDay = new Date(date);
+  //     endOfDay.setHours(23, 59, 59, 999);
+
+  //     let salaryRecord = await SalaryRecord.findOne({
+  //       date: { $gte: startOfDay, $lte: endOfDay },
+  //       department: 'Okisleniya',
+  //     }).session(session);
+
+  //     if (!salaryRecord) {
+  //       salaryRecord = (
+  //         await SalaryRecord.create(
+  //           [{
+  //             date: new Date(date),
+  //             department: 'Okisleniya',
+  //             btm_3: bn3Amt,
+  //             btm_5: 0,
+  //           }],
+  //           { session }
+  //         )
+  //       )[0];
+  //     } else {
+  //       salaryRecord.btm_3 += bn3Amt;
+  //       await salaryRecord.save({ session });
+  //     }
+
+  //     await reCalculateGlobalSalaries('Okisleniya', startOfDay, session);
+
+  //     await session.commitTransaction();
+  //     isCommitted = true;
+
+  //     return response.created(res, 'Material qozonga tashlandi. Qaynatish boshlandi!', {
+  //       inventoryId: inventoryRecord._id,
+  //       expectedBn5,
+  //       startTime: inventoryRecord.boilingStartTime,
+  //     });
+  //   } catch (error) {
+  //     if (!isCommitted) await session.abortTransaction();
+  //     return response.serverError(res, 'Qozonga tashlashda xatolik', error.message);
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
+
+  // // 📦 QOZONDAN OLISH – Jarayonni tugatish va BN-5 ni omborga qo‘shish
+  // async finishBoiling(req, res) {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+  //   let isCommitted = false;
+
+  //   try {
+  //     const { inventoryId, finalBn5Amount, forSale = 0, forMel = 0 } = req.body;
+
+  //     if (!inventoryId || !finalBn5Amount) {
+  //       return response.error(res, 'inventoryId va finalBn5Amount majburiy');
+  //     }
+
+  //     const finalAmt = Number(finalBn5Amount);
+  //     const saleAmt = Number(forSale);
+  //     const melAmt = Number(forMel);
+
+  //     if (finalAmt <= 0) {
+  //       return response.error(res, 'Haqiqiy BN-5 miqdori 0 dan katta bo‘lishi kerak');
+  //     }
+
+  //     if (saleAmt + melAmt > finalAmt) {
+  //       return response.error(res, 'Sotish + MEL uchun miqdor jami haqiqiy miqdordan oshmasligi kerak');
+  //     }
+
+  //     // Faol jarayonni topish
+  //     const record = await Inventory.findOne({
+  //       _id: inventoryId,
+  //       boilingStatus: 'boiling',
+  //     }).session(session);
+
+  //     if (!record) {
+  //       return response.error(res, 'Faol qaynatish jarayoni topilmadi yoki allaqachon tugatilgan');
+  //     }
+
+  //     // Qaynatish davomiyligini hisoblash
+  //     const durationSeconds = Math.floor((Date.now() - record.boilingStartTime.getTime()) / 1000);
+
+  //     // BN-5 ni omborga qo‘shish (weighted average price)
+  //     let bn5Material = await Material.findOne({ category: 'BN-5' }).session(session);
+
+  //     if (bn5Material) {
+  //       const oldQuantity = bn5Material.quantity;
+  //       const oldPrice = Number(bn5Material.price) || 0;
+  //       const totalQuantity = oldQuantity + finalAmt;
+  //       const weightedPrice = (oldQuantity * oldPrice + finalAmt * record.price) / totalQuantity;
+
+  //       bn5Material.quantity = totalQuantity;
+  //       bn5Material.price = weightedPrice;
+  //       await bn5Material.save({ session });
+  //     } else {
+  //       // Agar BN-5 hali omborda bo‘lmasa
+  //       await Material.create(
+  //         [{
+  //           name: 'BN-5',
+  //           category: 'BN-5',
+  //           quantity: finalAmt,
+  //           price: record.price,
+  //           unit: 'kilo',
+  //           currency: 'sum',
+  //         }],
+  //         { session }
+  //       );
+  //     }
+
+  //     // Inventory yozuvini yangilash
+  //     record.boilingStatus = 'finished';
+  //     record.boilingEndTime = new Date();
+  //     record.boilingDurationSeconds = durationSeconds;
+  //     record.bn5Amount = finalAmt;
+  //     record.bn5ForSale = saleAmt;
+  //     record.bn5ForMel = melAmt;
+
+  //     await record.save({ session });
+
+  //     // Ishchilarga qo‘shimcha maosh – BN-5 chiqqani uchun
+  //     const startOfDay = new Date(record.date);
+  //     startOfDay.setHours(0, 0, 0, 0);
+
+  //     let salaryRecord = await SalaryRecord.findOne({
+  //       date: { $gte: startOfDay, $lte: new Date(record.date).setHours(23, 59, 59, 999) },
+  //       department: 'Okisleniya',
+  //     }).session(session);
+
+  //     if (salaryRecord) {
+  //       salaryRecord.btm_5 += finalAmt;
+  //       await salaryRecord.save({ session });
+  //       await reCalculateGlobalSalaries('Okisleniya', startOfDay, session);
+  //     }
+
+  //     await session.commitTransaction();
+  //     isCommitted = true;
+
+  //     return response.success(res, `BN-5 muvaffaqiyatli ishlab chiqarildi: ${finalAmt} kg`, {
+  //       finalBn5: finalAmt,
+  //       forSale: saleAmt,
+  //       forMel: melAmt,
+  //       duration: durationSeconds,
+  //       weightedPrice: bn5Material ? bn5Material.price : record.price,
+  //     });
+  //   } catch (error) {
+  //     if (!isCommitted) await session.abortTransaction();
+  //     return response.serverError(res, 'Qozondan olishda xatolik', error.message);
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // }
+
+  // // Joriy faol jarayonni olish (frontend timer uchun)
+  // async getActiveBoilingProcess(req, res) {
+  //   try {
+  //     const active = await Inventory.findOne({ boilingStatus: 'boiling' })
+  //       .select(
+  //         'boilingStartTime bn3Amount wasteAmount price electricity gasAmount extra notes date bn5Amount bn5ForSale bn5ForMel'
+  //       )
+  //       .lean();
+
+  //     if (!active) {
+  //       return response.success(res, 'Hozirda faol qaynatish jarayoni yo‘q', null);
+  //     }
+
+  //     const elapsedSeconds = Math.floor((Date.now() - new Date(active.boilingStartTime).getTime()) / 1000);
+
+  //     const expectedBn5 = active.bn3Amount - active.wasteAmount;
+
+  //     return response.success(res, 'Faol jarayon topildi', {
+  //       ...active,
+  //       elapsedSeconds,
+  //       expectedBn5,
+  //     });
+  //   } catch (error) {
+  //     return response.serverError(res, 'Joriy jarayonni olishda xatolik', error.message);
+  //   }
+  // }
+
   async createBn5Production(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -703,6 +956,9 @@ class ProductionSystem {
       session.endSession();
     }
   }
+
+
+
 
   async productionForSalesBN5(req, res) {
     const session = await mongoose.startSession();

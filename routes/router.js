@@ -106,6 +106,9 @@ router.get("/top-products", productionSystem.getTopProductsByMonth);
 router.put("/finished-products/:id", productionSystem.updateFinished);
 router.delete("/finished-products/:id", productionSystem.deleteFinished);
 
+// router.post('/bn5/start-boiling', productionSystem.startBoiling);
+// router.post('/bn5/finish-boiling', productionSystem.finishBoiling);
+// router.get('/bn5/active-process', productionSystem.getActiveBoilingProcess);
 /**
  * ============================
  * Admin Routes
