@@ -82,6 +82,7 @@ const saleSchema = new mongoose.Schema(
       discountReason: { type: String, default: "" },
       paymentType: { type: String, enum: ["naqt", "bank"], default: "naqt" },
       isActive: { type: Boolean, default: true },
+      middlemanPayment: { type: Number, default: 0 },
       paymentHistory: [
         {
           amount: { type: Number, required: true },
