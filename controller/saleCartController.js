@@ -779,132 +779,145 @@ class SaleController {
 
   async getFilteredSales(req, res) {
     try {
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 15;
-      const search = req.query.search || ""; // Uncommented: search parametri
+      const page = Math.max(parseInt(req.query.page) || 1, 1);
+      const limit = Math.max(parseInt(req.query.limit) || 15, 1);
+      const search = (req.query.search || "").trim();
 
-      let customers = await Customer.find().lean();
-      if (!customers.length) {
+      // 1) Customer filter DB’da
+      const customerFilter = {};
+      if (search) {
+        const safe = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        customerFilter.$or = [
+          { name: { $regex: safe, $options: "i" } },
+          { phone: { $regex: safe, $options: "i" } },
+        ];
+      }
+
+      // 2) Statistika uchun customer ids (faqat mos keladiganlar)
+      // NOTE: Agar customerlar soni juda katta bo‘lsa, bu ham alohida optimizatsiya qilinadi.
+      const matchedCustomers = await Customer.find(customerFilter)
+        .select("_id name phone type company balans") // kerakli fieldlar
+        .lean();
+
+      if (!matchedCustomers.length) {
         return response.notFound(res, "Mijozlar topilmadi", []);
       }
 
-      // Yangi: search bo'lsa, mijozlarni filtrla (name va phone bo'yicha)
-      let filteredCustomers = customers;
-      if (search) {
-        filteredCustomers = customers.filter(
-          (c) =>
-            c.name.toLowerCase().includes(search.toLowerCase()) ||
-            (c.phone && c.phone.toLowerCase().includes(search.toLowerCase()))
-        );
+      const customerIds = matchedCustomers.map(c => c._id);
+
+      // 3) Bitta query: barcha sale’larni shu customerlar uchun olib kelamiz
+      // (history ko‘p bo‘lsa limit qo‘yish mumkin — pastda aytaman)
+      const salesAll = await Salecart.find({ customerId: { $in: customerIds } })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      // 4) Bitta query: expenses
+      const expensesAll = await Expense.find({ relatedId: { $in: customerIds } })
+        .lean();
+
+      // 5) Group qilish (JS’da O(n) map)
+      const salesByCustomer = new Map();
+      for (const s of salesAll) {
+        const key = String(s.customerId);
+        if (!salesByCustomer.has(key)) salesByCustomer.set(key, []);
+        salesByCustomer.get(key).push(s);
       }
 
-      const result = await Promise.all(
-        filteredCustomers.map(async (customer) => {
-          const sales = await Salecart.find({ customerId: customer._id })
-            .populate("customerId", "name type phone company balans")
-            .sort({ createdAt: -1 })
-            .lean();
-          sales.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const expensesByCustomer = new Map();
+      for (const e of expensesAll) {
+        const key = String(e.relatedId);
+        if (!expensesByCustomer.has(key)) expensesByCustomer.set(key, []);
+        expensesByCustomer.get(key).push(e);
+      }
 
-          const expenses = await Expense.find({
-            relatedId: customer._id,
-          }).lean();
-
-          let totalUndelivered = 0;
-          const groupedDeliveredItems = {};
-          sales.forEach((sale) => {
-            sale.items.forEach((item) => {
-              const delivered = sale.deliveredItems
-                .filter((d) => String(d.productId) === String(item.productId))
-                .reduce((sum, d) => sum + (d.deliveredQuantity || 0), 0);
-              const remaining = item.quantity - delivered;
-              if (remaining > 0) totalUndelivered += remaining;
-            });
-
-            sale.deliveredItems.forEach((d) => {
-              const dateKey = new Date(d.deliveryDate)
-                .toISOString()
-                .slice(0, 13);
-              if (!groupedDeliveredItems[dateKey])
-                groupedDeliveredItems[dateKey] = [];
-              groupedDeliveredItems[dateKey].push(d);
-            });
-          });
-
-          let balansStatus = "0";
-          if (customer.balans > 0) balansStatus = "Qarzdor";
-          else if (customer.balans < 0) balansStatus = "Haqdor";
-          else balansStatus = "Mavjud emas";
-
-          const lastSaleDate = sales.length
-            ? new Date(sales[0].createdAt)
-            : null;
-
-          return {
-            ...customer,
-            balansStatus,
-            history: sales,
-            Expenses: expenses,
-            totalUndelivered,
-            lastSaleDate,
-            groupedDeliveredItems,
-          };
-        })
-      );
-
+      // 6) Customer’larni hisoblab chiqamiz
       const now = new Date();
       const FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
 
-      let recentSales = [];
-      let oldSales = [];
+      const recentSales = [];
+      const oldSales = [];
 
-      // Ajratish: faqat 1 martta loop
-      for (const c of result) {
-        if (
-          c.lastSaleDate &&
-          now - new Date(c.lastSaleDate) <= FIFTEEN_DAYS_MS
-        ) {
-          recentSales.push(c); // oxirgi 15 kun ichidagi mijozlar
-        } else {
-          oldSales.push(c); // eski yoki savdosi bo‘lmaganlar
+      // Statistika (search bo‘yicha to‘liq)
+      let totalQarzdorAmount = 0;
+      let totalHaqdorAmount = 0;
+
+      for (const customer of matchedCustomers) {
+        const custIdStr = String(customer._id);
+        const history = salesByCustomer.get(custIdStr) || [];
+        const expenses = expensesByCustomer.get(custIdStr) || [];
+
+        // lastSaleDate: history sorted desc bo‘lgani uchun [0] yetarli
+        const lastSaleDate = history.length ? new Date(history[0].createdAt) : null;
+
+        // balansStatus
+        let balansStatus = "Mavjud emas";
+        if ((customer.balans || 0) > 0) balansStatus = "Qarzdor";
+        else if ((customer.balans || 0) < 0) balansStatus = "Haqdor";
+
+        if (balansStatus === "Qarzdor") totalQarzdorAmount += (customer.balans || 0);
+        if (balansStatus === "Haqdor") totalHaqdorAmount += (customer.balans || 0);
+
+        // totalUndelivered + groupedDeliveredItems
+        let totalUndelivered = 0;
+        const groupedDeliveredItems = {};
+
+        for (const sale of history) {
+          const items = sale.items || [];
+          const deliveredItems = sale.deliveredItems || [];
+
+          // undelivered
+          for (const item of items) {
+            const delivered = deliveredItems
+              .filter(d => String(d.productId) === String(item.productId))
+              .reduce((sum, d) => sum + (d.deliveredQuantity || 0), 0);
+
+            const remaining = (item.quantity || 0) - delivered;
+            if (remaining > 0) totalUndelivered += remaining;
+          }
+
+          // grouped delivered
+          for (const d of deliveredItems) {
+            const dateKey = new Date(d.deliveryDate).toISOString().slice(0, 13);
+            if (!groupedDeliveredItems[dateKey]) groupedDeliveredItems[dateKey] = [];
+            groupedDeliveredItems[dateKey].push(d);
+          }
         }
+
+        const payload = {
+          ...customer,
+          balansStatus,
+          history,         // shu yerda history return qilinyapti
+          Expenses: expenses,
+          totalUndelivered,
+          lastSaleDate,
+          groupedDeliveredItems,
+        };
+
+        if (lastSaleDate && (now - lastSaleDate) <= FIFTEEN_DAYS_MS) recentSales.push(payload);
+        else oldSales.push(payload);
       }
 
-      // Sort — bittadan chaqiriladi
-      recentSales.sort(
-        (a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate)
-      );
-      oldSales.sort(
-        (a, b) => new Date(b.lastSaleDate) - new Date(a.lastSaleDate)
-      );
+      // 7) Sort
+      recentSales.sort((a, b) => (b.lastSaleDate || 0) - (a.lastSaleDate || 0));
+      oldSales.sort((a, b) => (b.lastSaleDate || 0) - (a.lastSaleDate || 0));
 
-      // Yangi: to'liq filtrlangan statistika (search va pagination ga qaramay to'liq hisoblanadi)
-      const totalCustomers = result.length;
-      const totalQarzdorAmount = result
-        .filter((c) => c.balansStatus === "Qarzdor")
-        .reduce((sum, c) => sum + (c.balans || 0), 0);
-      const totalHaqdorAmount = result
-        .filter((c) => c.balansStatus === "Haqdor")
-        .reduce((sum, c) => sum + (c.balans || 0), 0);
-
-      // Pagination oldSales (faqat oldSales uchun)
-      const paginatedOldSales = oldSales.slice(
-        (page - 1) * limit,
-        page * limit
-      );
+      // 8) Pagination oldSales
+      const totalOldSalesCount = oldSales.length;
+      const paginatedOldSales = oldSales.slice((page - 1) * limit, page * limit);
 
       return response.success(res, "Tanlangan oyning faol savdolar ro‘yxati", {
         recentSales,
         oldSales: paginatedOldSales,
-        totalOldSalesCount: oldSales.length, // To'liq old soni (filtrlangan)
-        totalCustomers, // To'liq mijozlar soni (search ga qarab)
-        totalQarzdorAmount, // To'liq qarzdor summasi (search ga qarab)
-        totalHaqdorAmount, // To'liq haqdor summasi (search ga qarab)
+        totalOldSalesCount,
+        totalCustomers: matchedCustomers.length,
+        totalQarzdorAmount,
+        totalHaqdorAmount,
       });
     } catch (err) {
       return response.serverError(res, "Server xatosi", err.message);
     }
   }
+
 
   async getUndeliveredItems(req, res) {
     try {
@@ -1153,18 +1166,15 @@ class SaleController {
       const { _id, amount } = req.query;
 
       if (_id && amount) {
-        // Miqdorning to'g'riligini tekshirish
         const paymentAmount = parseFloat(amount);
         if (isNaN(paymentAmount) || paymentAmount <= 0) {
           return response.error(res, "Noto‘g‘ri miqdor kiritildi");
         }
 
-        // MongoDB sessiyasini boshlash va tranzaksiyani ochish
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
-          // Transport yozuvini _id orqali sessiyada topish
           const transport = await Transport.findById(_id).session(session);
           if (!transport) {
             await session.abortTransaction();
@@ -1172,31 +1182,28 @@ class SaleController {
             return response.notFound(res, "Transport topilmadi");
           }
 
-          // Transport balansining yetarliligini tekshirish
-          if (transport.balance < paymentAmount) {
-            await session.abortTransaction();
-            session.endSession();
-            return response.error(
-              res,
-              "Transport balansida yetarli mablag‘ yo‘q"
-            );
-          }
-
-          // Transport balansidan miqdorni ayirish
+          // ❗ MUHIM: balans minusga tushishiga RUXSAT
           transport.balance -= paymentAmount;
           await transport.save({ session });
 
-          // Tranzaksiyani yakunlash
           await session.commitTransaction();
           session.endSession();
 
+          // Balans holatini aniqlash
+          let status = "Teng";
+          if (transport.balance > 0) status = "Shofyor haqdor";
+          if (transport.balance < 0) status = "Shofyor qarzdor";
+
           return response.success(
             res,
-            "To‘lov muvaffaqiyatli amalga oshirildi va xarajat yozib olindi",
-            transport
+            "To‘lov muvaffaqiyatli amalga oshirildi",
+            {
+              transport: transport.transport,
+              balance: transport.balance,
+              status
+            }
           );
         } catch (error) {
-          // Xato yuz berganda tranzaksiyani bekor qilish
           await session.abortTransaction();
           session.endSession();
           return response.serverError(
@@ -1206,18 +1213,35 @@ class SaleController {
           );
         }
       } else {
-        // Barcha transport yozuvlarini olish (o'qish uchun tranzaksiya kerak emas)
         const transports = await Transport.find();
+
+        const transportsWithStatus = transports.map(t => {
+          let status = "Teng";
+          if (t.balance > 0) status = "Shofyor haqdor";
+          if (t.balance < 0) status = "Shofyor qarzdor";
+
+          return {
+            _id: t._id,
+            transport: t.transport,
+            balance: t.balance,
+            status,
+            createdAt: t.createdAt,
+            updatedAt: t.updatedAt
+          };
+        });
+
         return response.success(
           res,
           "Transportlar muvaffaqiyatli olindi",
-          transports
+          transportsWithStatus
         );
       }
     } catch (error) {
       return response.serverError(res, "Server xatosi", error.message);
     }
   }
+
 }
 
 module.exports = new SaleController();
+

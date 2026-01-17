@@ -16,6 +16,7 @@ const reCalculateGlobalSalaries = require("./calculateSalary/globalCalculate");
 const SalaryRecord = require("../model/salaryRecord");
 
 class ProductionSystem {
+
   async productionProcess(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -25,16 +26,14 @@ class ProductionSystem {
         date = "",
         products = [],
         consumedMaterials = [],
-        utilities,
+        utilities = {}, // ✅ default
       } = req.body;
 
       // ✅ Sana formatini to‘g‘rilash (dd.mm.yyyy → yyyy-mm-dd)
       let parsedDate;
       if (date) {
-        const [day, month, year] = date.split(".");
-        // Local vaqtga mos qilib yaratamiz
+        const [day, month, year] = String(date).split(".");
         const localDate = new Date(Number(year), Number(month) - 1, Number(day));
-        // UTC vaqtga 5 soatni (O'zbekiston uchun) qo'shamiz
         parsedDate = new Date(localDate.getTime() + 5 * 60 * 60 * 1000);
       } else {
         const now = new Date();
@@ -42,23 +41,17 @@ class ProductionSystem {
         parsedDate = new Date(now.getTime() + 5 * 60 * 60 * 1000);
       }
 
-      if (products.length === 0) {
+      if (!Array.isArray(products) || products.length === 0) {
         return response.error(res, "Hech qanday mahsulot ko‘rsatilmagan");
       }
 
-      const totalQuantity = products.reduce(
-        (sum, p) => sum + Number(p.quantity),
-        0
-      );
-
+      const totalQuantity = products.reduce((sum, p) => sum + Number(p.quantity || 0), 0);
       if (totalQuantity <= 0) {
         return response.error(res, "Umumiy miqdor noto‘g‘ri");
       }
 
-      // ✅ Bugungi kun (parsedDate asosida)
       const today = new Date(parsedDate);
       today.setHours(0, 0, 0, 0);
-
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
 
@@ -97,9 +90,7 @@ class ProductionSystem {
       // 2️⃣ Ishlab chiqarish xodimlarini chiqarib tashlash
       const filteredExpenses = [];
       for (const exp of expenses) {
-        if (
-          ["Avans", "Oylik maosh", "Ish haqi xarajatlari"].includes(exp.category)
-        ) {
+        if (["Avans", "Oylik maosh", "Ish haqi xarajatlari"].includes(exp.category)) {
           if (exp.relatedId) {
             const employee = await Admins.findById(exp.relatedId).lean();
             if (!employee || employee.role !== "ishlab chiqarish") {
@@ -113,67 +104,49 @@ class ProductionSystem {
         }
       }
 
-      const totalAmount = filteredExpenses.reduce(
-        (sum, item) => sum + item.amount,
-        0
-      );
-
-      const additionalAmount = totalAmount || 0;
+      const additionalAmount = filteredExpenses.reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
       // ✅ Zavod ma'lumotlarini olish
       const [factory] = await Factory.find().session(session);
-      if (!factory) {
-        return response.notFound(res, "Zavod ma'lumotlari topilmadi!");
-      }
+      if (!factory) return response.notFound(res, "Zavod ma'lumotlari topilmadi!");
 
       // ✅ Resurs xarajatlari
-      const electricityCostPerKWH = Number(factory.electricityPrice);
-      const gasCostPerKWH = Number(factory.methaneGasPrice);
-      const totalElectricityUsed = parseFloat(
-        (utilities.electricityConsumption || 0).toFixed(2)
-      );
-      const totalGasUsed = parseFloat((utilities.gasConsumption || 0).toFixed(2));
+      const electricityCostPerKWH = Number(factory.electricityPrice || 0);
+      const gasCostPerKWH = Number(factory.methaneGasPrice || 0);
+
+      const totalElectricityUsed = parseFloat(Number(utilities.electricityConsumption || 0).toFixed(2));
+      const totalGasUsed = parseFloat(Number(utilities.gasConsumption || 0).toFixed(2));
+
       const totalElectricityCost = totalElectricityUsed * electricityCostPerKWH;
       const totalGasCost = totalGasUsed * gasCostPerKWH;
 
-
-      const periodExpense = parseFloat((utilities.periodExpense || 0).toFixed(2));
-
-      // Parse period expense
-      // const periodExpense = parseFloat((utilities.periodExpense || 0).toFixed(2));
-      // >>>>>>> eb6d9d600a7d8346974d239d7f9efd710279b8f4
+      const periodExpense = parseFloat(Number(utilities.periodExpense || 0).toFixed(2));
 
       // ✅ Materiallar sarfi
       const materialsUsed = [];
       let totalMaterialCost = 0;
 
-      for (const consumed of consumedMaterials) {
-        const material = await Material.findById(consumed.materialId).session(
-          session
-        );
+      for (const consumed of consumedMaterials || []) {
+        const material = await Material.findById(consumed.materialId).session(session);
         if (!material) {
-          return response.notFound(
-            res,
-            `Material topilmadi: ID ${consumed.materialId}`
-          );
+          return response.notFound(res, `Material topilmadi: ID ${consumed.materialId}`);
         }
 
         const consumedQuantity = parseFloat(Number(consumed.quantity || 0).toFixed(2));
-        const unitPrice = parseFloat(Number(material.price).toFixed(2));
+        const unitPrice = parseFloat(Number(material.price || 0).toFixed(2));
         const cost = consumedQuantity * unitPrice;
-        totalMaterialCost += cost;
 
-        if (Number(material.quantity) < consumedQuantity) {
+        if (Number(material.quantity || 0) < consumedQuantity) {
           return response.error(
             res,
             `Yetarli ${material.name} yo‘q. Kerak: ${consumedQuantity}, Mavjud: ${material.quantity}`
           );
         }
 
-        material.quantity = parseFloat(
-          (Number(material.quantity) - consumedQuantity).toFixed(2)
-        );
+        material.quantity = parseFloat((Number(material.quantity) - consumedQuantity).toFixed(2));
         await material.save({ session });
+
+        totalMaterialCost += cost;
 
         materialsUsed.push({
           materialId: material._id,
@@ -193,35 +166,20 @@ class ProductionSystem {
       for (const product of products) {
         const normaId = product.normaId;
         const productName = product.name;
-        const quantity = Number(product.quantity);
+        const quantity = Number(product.quantity || 0);
 
-        if (!normaId || !quantity || quantity <= 0) {
-          return response.error(
-            res,
-            `Mahsulot normasi yoki miqdori noto‘g‘ri: ${productName}`
-          );
+        if (!normaId || quantity <= 0) {
+          return response.error(res, `Mahsulot normasi yoki miqdori noto‘g‘ri: ${productName}`);
         }
 
-        const productNorma = await ProductNorma.findById(normaId)
-          .lean()
-          .session(session);
-        if (!productNorma) {
-          return response.notFound(res, `Norma topilmadi: ${productName}`);
-        }
+        const productNorma = await ProductNorma.findById(normaId).lean().session(session);
+        if (!productNorma) return response.notFound(res, `Norma topilmadi: ${productName}`);
 
-        const productionPrice = await Product.findOne({
-          name: productName,
-        }).session(session);
-        if (!productionPrice) {
-          return response.notFound(res, `Narx topilmadi: ${productName}`);
-        }
+        const productionPrice = await Product.findOne({ name: productName }).session(session);
+        if (!productionPrice) return response.notFound(res, `Narx topilmadi: ${productName}`);
 
-        const workerPayPerUnit = parseFloat(
-          Number(productionPrice.productionCost).toFixed(2)
-        );
-        const loadingPayPerUnit = parseFloat(
-          Number(productionPrice.loadingCost).toFixed(2)
-        );
+        const workerPayPerUnit = parseFloat(Number(productionPrice.productionCost || 0).toFixed(2));
+        const loadingPayPerUnit = parseFloat(Number(productionPrice.loadingCost || 0).toFixed(2));
 
         const productWorkerCost = workerPayPerUnit * quantity;
         const productLoadingCost = loadingPayPerUnit * quantity;
@@ -234,11 +192,9 @@ class ProductionSystem {
           productionPrice,
           quantity,
           productName,
-          category: product.category,
+          category: product.category, // ✅ frontdan keladi
           workerPayPerUnit,
           loadingPayPerUnit,
-          productWorkerCost,
-          productLoadingCost,
         });
 
         productsForHistory.push({
@@ -257,22 +213,16 @@ class ProductionSystem {
         additionalAmount +
         periodExpense;
 
-      const sharedPerUnit =
-        totalQuantity > 0 ? totalSharedCost / totalQuantity : 0;
+      const sharedPerUnit = totalQuantity > 0 ? totalSharedCost / totalQuantity : 0;
 
-      const totalCostSum = parseFloat(
-        (totalSharedCost + totalWorkerCost + totalLoadingCost).toFixed(2)
-      );
+      const totalCostSum = parseFloat((totalSharedCost + totalWorkerCost + totalLoadingCost).toFixed(2));
 
       const producedMessages = [];
 
+      // FinishedProduct update/create
       for (const prodData of productDataList) {
         const productionCost = parseFloat(
-          (
-            prodData.workerPayPerUnit +
-            prodData.loadingPayPerUnit +
-            sharedPerUnit
-          ).toFixed(2)
+          (prodData.workerPayPerUnit + prodData.loadingPayPerUnit + sharedPerUnit).toFixed(2)
         );
 
         let finishedProduct = await FinishedProduct.findOne({
@@ -281,10 +231,7 @@ class ProductionSystem {
 
         if (finishedProduct) {
           finishedProduct.quantity += prodData.quantity;
-          finishedProduct.productionCost = Math.max(
-            finishedProduct.productionCost,
-            productionCost
-          );
+          finishedProduct.productionCost = Math.max(finishedProduct.productionCost || 0, productionCost);
           await finishedProduct.save({ session });
         } else {
           await FinishedProduct.create(
@@ -301,9 +248,7 @@ class ProductionSystem {
           );
         }
 
-        producedMessages.push(
-          `${prodData.productNorma.productName} dan ${prodData.quantity} ta ishlab chiqarildi`
-        );
+        producedMessages.push(`${prodData.productNorma.productName} dan ${prodData.quantity} ta ishlab chiqarildi`);
       }
 
       // ✅ Ishlab chiqarish tarixi
@@ -327,14 +272,14 @@ class ProductionSystem {
         { session }
       );
 
-      // ✅ Maosh hisoblash (shu sanaga asoslangan)
+      // ✅ Maosh hisoblash
       const startOfDay = new Date(parsedDate);
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(parsedDate);
       endOfDay.setHours(23, 59, 59, 999);
 
       for (const prodData of productDataList) {
-        const lowerName = prodData.productName.toLowerCase();
+        const lowerName = String(prodData.productName || "").toLowerCase();
 
         if (lowerName.includes("ruberoid")) {
           let record = await SalaryRecord.findOne({
@@ -344,13 +289,7 @@ class ProductionSystem {
 
           if (!record) {
             await SalaryRecord.create(
-              [
-                {
-                  date: parsedDate,
-                  department: "ruberoid",
-                  producedCount: prodData.quantity,
-                },
-              ],
+              [{ date: parsedDate, department: "ruberoid", producedCount: prodData.quantity }],
               { session }
             );
           } else {
@@ -360,10 +299,7 @@ class ProductionSystem {
           await reCalculateGlobalSalaries("ruberoid", parsedDate, session);
         }
 
-        if (
-          lowerName.includes("polizol") ||
-          lowerName.includes("folygoizol")
-        ) {
+        if (lowerName.includes("polizol") || lowerName.includes("folygoizol")) {
           let record = await SalaryRecord.findOne({
             date: { $gte: startOfDay, $lte: endOfDay },
             department: "polizol",
@@ -371,13 +307,7 @@ class ProductionSystem {
 
           if (!record) {
             await SalaryRecord.create(
-              [
-                {
-                  date: parsedDate,
-                  department: "polizol",
-                  producedCount: prodData.quantity,
-                },
-              ],
+              [{ date: parsedDate, department: "polizol", producedCount: prodData.quantity }],
               { session }
             );
           } else {
@@ -389,29 +319,23 @@ class ProductionSystem {
       }
 
       await session.commitTransaction();
-      return response.created(
-        res,
-        `✅ Ishlab chiqarildi: ${producedMessages.join(", ")}`,
-        {
-          totalCost: totalCostSum,
-          totalElectricityUsed,
-          totalGasUsed,
-          totalElectricityCost,
-          totalGasCost,
-          periodExpense,
-        }
-      );
+
+      return response.created(res, `✅ Ishlab chiqarildi: ${producedMessages.join(", ")}`, {
+        totalCost: totalCostSum,
+        totalElectricityUsed,
+        totalGasUsed,
+        totalElectricityCost,
+        totalGasCost,
+        periodExpense,
+      });
     } catch (error) {
       await session.abortTransaction();
-      return response.serverError(
-        res,
-        "❌ Ishlab chiqarish xatolikka uchradi",
-        error.message
-      );
+      return response.serverError(res, "❌ Ishlab chiqarish xatolikka uchradi", error.message);
     } finally {
       session.endSession();
     }
   }
+
 
   async finishedProducts(req, res) {
     try {
@@ -429,20 +353,7 @@ class ProductionSystem {
 
       // 2) finishedProduct va materialni olish
       const products = await FinishedProduct.find().lean();
-      const material = await Material.findOne({ category: "BN-5" }).lean();
-
-      const bn = {
-        _id: material._id,
-        productName: "Bitum (5/M) melsiz",
-        category: material.category,
-        quantity: material.quantity,
-        sellingPrice: material.price,
-        isReturned: false,
-        isDefective: false,
-        returnInfo: [],
-      };
-
-      let newData = [...products, bn];
+      let newData = [...products];
 
       // 3) productlarni sotilgan miqdorga qarab tartiblash
       const soldMap = {};
@@ -519,268 +430,6 @@ class ProductionSystem {
     }
   }
 
-  // 4454
-
-  // // 🔥 QOZONGA TASHLASH – Jarayonni boshlash
-  // async startBoiling(req, res) {
-  //   const session = await mongoose.startSession();
-  //   session.startTransaction();
-  //   let isCommitted = false;
-
-  //   try {
-  //     const {
-  //       date,
-  //       bn3Amount,
-  //       wasteAmount,
-  //       gasAmount = 0,
-  //       electricity = 0,
-  //       extra = 0,
-  //       price, // 1 kg BN-5 narxi (hisoblangan)
-  //       notes = '',
-  //     } = req.body;
-
-  //     // Majburiy maydonlar validatsiyasi
-  //     if (!date || !bn3Amount || !wasteAmount || !price) {
-  //       return response.error(res, 'Majburiy maydonlar: date, bn3Amount, wasteAmount, price');
-  //     }
-
-  //     const bn3Amt = Number(bn3Amount);
-  //     const wasteAmt = Number(wasteAmount);
-  //     const unitCost = Number(price);
-
-  //     if (isNaN(bn3Amt) || isNaN(wasteAmt) || isNaN(unitCost) || unitCost <= 0) {
-  //       return response.error(res, 'Raqamlar noto‘g‘ri kiritilgan');
-  //     }
-
-  //     const expectedBn5 = bn3Amt - wasteAmt;
-  //     if (expectedBn5 < 0) {
-  //       return response.error(res, 'Chiqindi miqdori BN-3 dan oshib ketdi');
-  //     }
-
-  //     // Allaqachon qaynatilayotgan jarayon bor-yo‘qligini tekshirish
-  //     const activeProcess = await Inventory.findOne({ boilingStatus: 'boiling' }).session(session);
-  //     if (activeProcess) {
-  //       return response.error(res, 'Allaqachon qozonda qaynatish jarayoni mavjud!');
-  //     }
-
-  //     // BN-3 ombordan yetarliligini tekshirish va chiqarish
-  //     const bn3Material = await Material.findOne({ category: 'BN-3' }).session(session);
-  //     if (!bn3Material || bn3Material.quantity < bn3Amt) {
-  //       return response.error(
-  //         res,
-  //         `BN-3 yetarli emas. Mavjud: ${bn3Material?.quantity || 0} kg, Talab: ${bn3Amt} kg`
-  //       );
-  //     }
-
-  //     bn3Material.quantity -= bn3Amt;
-  //     await bn3Material.save({ session });
-
-  //     // Yangi Inventory yozuvi yaratish (qaynatish boshlandi)
-  //     const [inventoryRecord] = await Inventory.create(
-  //       [{
-  //         productionName: 'BN-5',
-  //         date: new Date(date),
-  //         boilingStatus: 'boiling',
-  //         boilingStartTime: new Date(), // hozirgi vaqt
-  //         bn3Amount: bn3Amt,           // saqlaymiz, keyin hisobot uchun foydali
-  //         wasteAmount: wasteAmt,
-  //         bn5Amount: 0,                // hali chiqmagan
-  //         bn5ForSale: 0,
-  //         bn5ForMel: 0,
-  //         melAmount: 0,
-  //         electricity: Number(electricity),
-  //         gasAmount: Number(gasAmount),
-  //         extra: Number(extra),
-  //         price: unitCost,
-  //         notes,
-  //         kraftPaper: 0,
-  //         sellingPrice: 0,
-  //         qop: 0,
-  //         items: [],
-  //       }],
-  //       { session }
-  //     );
-
-  //     // Ishchilarga maosh hisoblash – BN-3 tashlangani uchun
-  //     const startOfDay = new Date(date);
-  //     startOfDay.setHours(0, 0, 0, 0);
-  //     const endOfDay = new Date(date);
-  //     endOfDay.setHours(23, 59, 59, 999);
-
-  //     let salaryRecord = await SalaryRecord.findOne({
-  //       date: { $gte: startOfDay, $lte: endOfDay },
-  //       department: 'Okisleniya',
-  //     }).session(session);
-
-  //     if (!salaryRecord) {
-  //       salaryRecord = (
-  //         await SalaryRecord.create(
-  //           [{
-  //             date: new Date(date),
-  //             department: 'Okisleniya',
-  //             btm_3: bn3Amt,
-  //             btm_5: 0,
-  //           }],
-  //           { session }
-  //         )
-  //       )[0];
-  //     } else {
-  //       salaryRecord.btm_3 += bn3Amt;
-  //       await salaryRecord.save({ session });
-  //     }
-
-  //     await reCalculateGlobalSalaries('Okisleniya', startOfDay, session);
-
-  //     await session.commitTransaction();
-  //     isCommitted = true;
-
-  //     return response.created(res, 'Material qozonga tashlandi. Qaynatish boshlandi!', {
-  //       inventoryId: inventoryRecord._id,
-  //       expectedBn5,
-  //       startTime: inventoryRecord.boilingStartTime,
-  //     });
-  //   } catch (error) {
-  //     if (!isCommitted) await session.abortTransaction();
-  //     return response.serverError(res, 'Qozonga tashlashda xatolik', error.message);
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // }
-
-  // // 📦 QOZONDAN OLISH – Jarayonni tugatish va BN-5 ni omborga qo‘shish
-  // async finishBoiling(req, res) {
-  //   const session = await mongoose.startSession();
-  //   session.startTransaction();
-  //   let isCommitted = false;
-
-  //   try {
-  //     const { inventoryId, finalBn5Amount, forSale = 0, forMel = 0 } = req.body;
-
-  //     if (!inventoryId || !finalBn5Amount) {
-  //       return response.error(res, 'inventoryId va finalBn5Amount majburiy');
-  //     }
-
-  //     const finalAmt = Number(finalBn5Amount);
-  //     const saleAmt = Number(forSale);
-  //     const melAmt = Number(forMel);
-
-  //     if (finalAmt <= 0) {
-  //       return response.error(res, 'Haqiqiy BN-5 miqdori 0 dan katta bo‘lishi kerak');
-  //     }
-
-  //     if (saleAmt + melAmt > finalAmt) {
-  //       return response.error(res, 'Sotish + MEL uchun miqdor jami haqiqiy miqdordan oshmasligi kerak');
-  //     }
-
-  //     // Faol jarayonni topish
-  //     const record = await Inventory.findOne({
-  //       _id: inventoryId,
-  //       boilingStatus: 'boiling',
-  //     }).session(session);
-
-  //     if (!record) {
-  //       return response.error(res, 'Faol qaynatish jarayoni topilmadi yoki allaqachon tugatilgan');
-  //     }
-
-  //     // Qaynatish davomiyligini hisoblash
-  //     const durationSeconds = Math.floor((Date.now() - record.boilingStartTime.getTime()) / 1000);
-
-  //     // BN-5 ni omborga qo‘shish (weighted average price)
-  //     let bn5Material = await Material.findOne({ category: 'BN-5' }).session(session);
-
-  //     if (bn5Material) {
-  //       const oldQuantity = bn5Material.quantity;
-  //       const oldPrice = Number(bn5Material.price) || 0;
-  //       const totalQuantity = oldQuantity + finalAmt;
-  //       const weightedPrice = (oldQuantity * oldPrice + finalAmt * record.price) / totalQuantity;
-
-  //       bn5Material.quantity = totalQuantity;
-  //       bn5Material.price = weightedPrice;
-  //       await bn5Material.save({ session });
-  //     } else {
-  //       // Agar BN-5 hali omborda bo‘lmasa
-  //       await Material.create(
-  //         [{
-  //           name: 'BN-5',
-  //           category: 'BN-5',
-  //           quantity: finalAmt,
-  //           price: record.price,
-  //           unit: 'kilo',
-  //           currency: 'sum',
-  //         }],
-  //         { session }
-  //       );
-  //     }
-
-  //     // Inventory yozuvini yangilash
-  //     record.boilingStatus = 'finished';
-  //     record.boilingEndTime = new Date();
-  //     record.boilingDurationSeconds = durationSeconds;
-  //     record.bn5Amount = finalAmt;
-  //     record.bn5ForSale = saleAmt;
-  //     record.bn5ForMel = melAmt;
-
-  //     await record.save({ session });
-
-  //     // Ishchilarga qo‘shimcha maosh – BN-5 chiqqani uchun
-  //     const startOfDay = new Date(record.date);
-  //     startOfDay.setHours(0, 0, 0, 0);
-
-  //     let salaryRecord = await SalaryRecord.findOne({
-  //       date: { $gte: startOfDay, $lte: new Date(record.date).setHours(23, 59, 59, 999) },
-  //       department: 'Okisleniya',
-  //     }).session(session);
-
-  //     if (salaryRecord) {
-  //       salaryRecord.btm_5 += finalAmt;
-  //       await salaryRecord.save({ session });
-  //       await reCalculateGlobalSalaries('Okisleniya', startOfDay, session);
-  //     }
-
-  //     await session.commitTransaction();
-  //     isCommitted = true;
-
-  //     return response.success(res, `BN-5 muvaffaqiyatli ishlab chiqarildi: ${finalAmt} kg`, {
-  //       finalBn5: finalAmt,
-  //       forSale: saleAmt,
-  //       forMel: melAmt,
-  //       duration: durationSeconds,
-  //       weightedPrice: bn5Material ? bn5Material.price : record.price,
-  //     });
-  //   } catch (error) {
-  //     if (!isCommitted) await session.abortTransaction();
-  //     return response.serverError(res, 'Qozondan olishda xatolik', error.message);
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // }
-
-  // // Joriy faol jarayonni olish (frontend timer uchun)
-  // async getActiveBoilingProcess(req, res) {
-  //   try {
-  //     const active = await Inventory.findOne({ boilingStatus: 'boiling' })
-  //       .select(
-  //         'boilingStartTime bn3Amount wasteAmount price electricity gasAmount extra notes date bn5Amount bn5ForSale bn5ForMel'
-  //       )
-  //       .lean();
-
-  //     if (!active) {
-  //       return response.success(res, 'Hozirda faol qaynatish jarayoni yo‘q', null);
-  //     }
-
-  //     const elapsedSeconds = Math.floor((Date.now() - new Date(active.boilingStartTime).getTime()) / 1000);
-
-  //     const expectedBn5 = active.bn3Amount - active.wasteAmount;
-
-  //     return response.success(res, 'Faol jarayon topildi', {
-  //       ...active,
-  //       elapsedSeconds,
-  //       expectedBn5,
-  //     });
-  //   } catch (error) {
-  //     return response.serverError(res, 'Joriy jarayonni olishda xatolik', error.message);
-  //   }
-  // }
 
   async createBn5Production(req, res) {
     const session = await mongoose.startSession();
@@ -958,14 +607,17 @@ class ProductionSystem {
   }
 
 
-
-
   async productionForSalesBN5(req, res) {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
       const { processData, packagingData } = req.body;
+
+      if (!processData || !packagingData || !Array.isArray(packagingData)) {
+        return response.error(res, "Noto'g'ri kirish ma'lumotlari");
+      }
+
       const {
         date,
         bn5Amount,
@@ -979,41 +631,36 @@ class ProductionSystem {
         price,
         notes = "",
       } = processData;
-      if (!processData || !packagingData || !Array.isArray(packagingData)) {
-        return response.error(res, "Noto'g'ri kirish ma'lumotlari");
-      }
 
-      // Materiallarni topish
-      const bn5Material = await Material.findOne({ category: "BN-5" }).session(
-        session
-      );
-      const melMaterial = await Material.findOne({ category: "Mel" }).session(
-        session
-      );
-      const ipMaterial = await Material.findOne({ category: "ip" }).session(
-        session
-      );
-      const qopQogoz = await Material.findOne({ category: "qop" }).session(
-        session
-      );
-      const kraf = await Material.findOne({ category: "kraf" }).session(
-        session
-      );
+      // =========================
+      // MATERIALS
+      // =========================
+      const bn5Material = await Material.findOne({ category: "BN-5" }).session(session);
+      const melMaterial = await Material.findOne({ category: "Mel" }).session(session);
+      const ipMaterial = await Material.findOne({ category: "ip" }).session(session);
+      const qopQogoz = await Material.findOne({ category: "qop" }).session(session);
+      const kraf = await Material.findOne({ category: "kraf" }).session(session);
 
       if (!bn5Material || !melMaterial || !ipMaterial || !qopQogoz || !kraf) {
         return response.error(res, "Kerakli materiallar topilmadi");
       }
-      // Arqon (gramm -> kg)
+
+      // =========================
+      // ROPE (grams -> kg)
+      // =========================
       const totalRopeKg = packagingData.reduce((sum, pkg) => {
         const ropeGrams = parseFloat(pkg.rope) || 0;
         return sum + ropeGrams / 1000;
       }, 0);
 
-      // Stakan va Qop bo'yicha ajratish
-      const stakanItems = packagingData.filter((pkg) =>
-        pkg.label.includes("Stakan")
-      );
-      const qopItems = packagingData.filter((pkg) => pkg.label === "Qop");
+      // =========================
+      // STAKAN / QOP SPLIT
+      // =========================
+      const stakanItems = packagingData.filter((pkg) => String(pkg.label || "").includes("Stakan"));
+      // Sizda frontda label "BN-5 Qop" bo'ladi.
+      // Shuning uchun backendda "Qop" deb qattiq tekshirish xato bo'lishi mumkin.
+      // Bu yerda qopni label ichida "Qop" bo'lsa deb tekshiramiz:
+      const qopItems = packagingData.filter((pkg) => String(pkg.label || "").includes("Qop"));
 
       const totalStakanQuantity = stakanItems.reduce(
         (sum, pkg) => sum + (parseFloat(pkg.quantity) || 0),
@@ -1024,10 +671,15 @@ class ProductionSystem {
         0
       );
 
-      // Material yetarliligini tekshirish
+      // =========================
+      // STOCK CHECK
+      // =========================
+      const bn5Need = Number(bn5Amount) || 0;
+      const melNeed = Number(melAmount) || 0;
+
       if (
-        bn5Material.quantity < bn5Amount ||
-        melMaterial.quantity < melAmount ||
+        bn5Material.quantity < bn5Need ||
+        melMaterial.quantity < melNeed ||
         ipMaterial.quantity < totalRopeKg ||
         kraf.quantity < totalStakanQuantity ||
         qopQogoz.quantity < totalQopQuantity
@@ -1035,86 +687,109 @@ class ProductionSystem {
         return response.error(res, "Materiallar miqdori yetarli emas");
       }
 
-      // Material miqdorlarini kamaytirish
-      bn5Material.quantity -= bn5Amount;
-      melMaterial.quantity -= melAmount;
+      // =========================
+      // DECREMENT STOCKS
+      // =========================
+      bn5Material.quantity -= bn5Need;
+      melMaterial.quantity -= melNeed;
       ipMaterial.quantity -= totalRopeKg;
       kraf.quantity -= totalStakanQuantity;
       qopQogoz.quantity -= totalQopQuantity;
 
-      const [bn5Saved, melSaved, ipSaved, krafSaved, qopSaved] =
-        await Promise.all([
-          bn5Material.save({ session }),
-          melMaterial.save({ session }),
-          ipMaterial.save({ session }),
-          kraf.save({ session }),
-          qopQogoz.save({ session }),
-        ]);
+      const [bn5Saved, melSaved, ipSaved, krafSaved, qopSaved] = await Promise.all([
+        bn5Material.save({ session }),
+        melMaterial.save({ session }),
+        ipMaterial.save({ session }),
+        kraf.save({ session }),
+        qopQogoz.save({ session }),
+      ]);
 
       if (!bn5Saved || !melSaved || !ipSaved || !krafSaved || !qopSaved) {
-        return response.error(
-          res,
-          "Materiallar miqdorini yangilashda xatolik yuz berdi"
-        );
+        return response.error(res, "Materiallar miqdorini yangilashda xatolik yuz berdi");
       }
 
-      // Tayyor mahsulotlarni saqlash
+      // =========================
+      // FINISHED PRODUCTS
+      // =========================
       const finishedProducts = [];
 
-      for (const pkg of packagingData) {
-        const { label, bn5Amount: pkgBn5Amount, quantity, unit, rope } = pkg;
+      // ✅ YANGI: melAmount = 0 bo'lsa — melsiz productga yozamiz
+      const isMelZero = Number(melAmount) === 0;
+      const melsizProductName = "BN-5 Melsiz";
+      console.log(isMelZero);
 
-        if (!label || !pkgBn5Amount || !quantity || !unit) {
+      for (const pkg of packagingData) {
+        const { label, bn5Amount: pkgBn5Amount, quantity, unit } = pkg;
+
+        if (!label || pkgBn5Amount == null || !quantity || !unit) {
           return response.error(
             res,
             `Noto'g'ri qadoqlash ma'lumotlari: ${JSON.stringify(pkg)}`
           );
         }
 
+        // melAmount=0 bo'lsa hammasi "Bitum (5/M) melsiz" ga yig'iladi
+        const targetProductName = isMelZero ? melsizProductName : label;
+
+        const computedCategory = isMelZero
+          ? "BN-5"
+          : (String(targetProductName).includes("Stakan") ? "Stakan" : "Qop");
+
         let finishedProduct = await FinishedProduct.findOne({
-          productName: label,
+          productName: targetProductName,
           marketType: "tashqi",
         }).session(session);
 
         if (finishedProduct) {
-          finishedProduct.quantity += pkgBn5Amount;
+          finishedProduct.quantity += Number(pkgBn5Amount) || 0;
+          // ✅ update category when mel=0
+          finishedProduct.category = computedCategory;
+          // ixtiyoriy, lekin yaxshi: so'nggi ishlab chiqarish qiymatlarini yangilab qo'yish
+          finishedProduct.sellingPrice = Number(sellingPrice) || finishedProduct.sellingPrice;
+          finishedProduct.productionCost = Number(price) || finishedProduct.productionCost;
+          finishedProduct.productionDate = new Date(date);
+          finishedProduct.size = unit;
+
           await finishedProduct.save({ session });
         } else {
           const [newProduct] = await FinishedProduct.create(
             [
               {
-                productName: label,
-                category: label.includes("Stakan") ? "Stakan" : "Qop",
-                quantity: pkgBn5Amount,
+                productName: targetProductName,
+                category: computedCategory,
+                quantity: Number(pkgBn5Amount) || 0,
                 marketType: "tashqi",
-                sellingPrice,
+                sellingPrice: Number(sellingPrice) || 0,
                 size: unit,
-                productionCost: price,
+                productionCost: Number(price) || 0,
                 productionDate: new Date(date),
               },
             ],
             { session }
           );
+
           finishedProduct = newProduct;
         }
 
         finishedProducts.push(finishedProduct);
       }
 
-      // Inventory ma'lumotlarini tayyorlash
+      // =========================
+      // INVENTORY
+      // =========================
       const inventoryData = {
         productionName: "BN-5 + Mel",
         date: new Date(date),
-        bn5Amount,
-        melAmount,
-        electricity,
-        gasAmount,
+        bn5Amount: bn5Need,
+        melAmount: melNeed,
+        electricity: Number(electricity) || 0,
+        gasAmount: Number(gasAmount) || 0,
         notes,
-        extra,
-        kraftPaper,
-        sellingPrice,
-        qop,
-        price,
+        extra: Number(extra) || 0,
+        kraftPaper: Number(kraftPaper) || 0,
+        sellingPrice: Number(sellingPrice) || 0,
+        qop: Number(qop) || 0,
+        price: Number(price) || 0,
         items: packagingData.map((pkg) => ({
           label: pkg.label,
           bn5Amount: pkg.bn5Amount,
@@ -1124,23 +799,23 @@ class ProductionSystem {
         })),
       };
 
-      // Inventory'ga saqlash
       const [inventory] = await Inventory.create([inventoryData], { session });
 
-      let btm5Sale = bn5Amount + melAmount;
-      // await CalculateBN5forSale(btm5Sale, date, session);
+      // =========================
+      // SALARY RECORD
+      // =========================
+      const btm5Sale = bn5Need + melNeed;
 
       const startOfDay = new Date(date).setHours(0, 0, 0, 0);
       const endOfDay = new Date(date).setHours(23, 59, 59, 999);
 
-      // Check for existing SalaryRecord
       let exactSalaryRecord = await SalaryRecord.findOne({
         date: { $gte: startOfDay, $lte: endOfDay },
         department: "Okisleniya",
       }).session(session);
 
       if (!exactSalaryRecord) {
-        exactSalaryRecord = await SalaryRecord.create(
+        const created = await SalaryRecord.create(
           [
             {
               date: new Date(date),
@@ -1150,24 +825,22 @@ class ProductionSystem {
           ],
           { session }
         );
-        exactSalaryRecord = exactSalaryRecord[0];
+        exactSalaryRecord = created[0];
       } else {
         exactSalaryRecord.btm_5_sale += btm5Sale;
         await exactSalaryRecord.save({ session });
       }
 
-      // Recalculate salaries
       await reCalculateGlobalSalaries("Okisleniya", startOfDay, session);
 
-      // Yakunlash
+      // =========================
+      // COMMIT
+      // =========================
       await session.commitTransaction();
 
       return response.created(
         res,
-        `${packagingData.reduce(
-          (sum, pkg) => sum + pkg.quantity,
-          0
-        )} dona tashqi bozor uchun muvaffaqiyatli ishlab chiqarildi`,
+        `${packagingData.reduce((sum, pkg) => sum + (Number(pkg.quantity) || 0), 0)} dona tashqi bozor uchun muvaffaqiyatli ishlab chiqarildi`,
         {
           totalCost: price,
           inventoryId: inventory._id,
@@ -1193,7 +866,11 @@ class ProductionSystem {
     }
   }
 
-  //Inventory get
+
+
+
+
+
   async getInventory(req, res) {
     try {
       const { startDate, endDate } = req.query;

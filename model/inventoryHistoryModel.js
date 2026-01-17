@@ -5,7 +5,7 @@ const itemSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true,
-        enum: ['BN-5 Qop', 'Stakan kichik', 'Stakan katta'],
+        enum: ['BN-5 Qop', 'Stakan kichik', 'Stakan katta', "BN-5 Melsiz",],
         index: true
     },
     bn5Amount: {
