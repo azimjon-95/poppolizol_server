@@ -299,6 +299,59 @@ class MaterialService {
     }
   }
 
+  async getMaterialsRoutes(req, res) {
+    try {
+      const { materialName } = req.params;
+
+      const data = await Income.aggregate([
+        { $unwind: "$materials" },
+
+        {
+          $match: {
+            "materials.name": materialName,
+          },
+        },
+
+        {
+          $group: {
+            _id: {
+              firmId: "$firmId",
+              firmName: "$firm.name",
+            },
+            totalQuantity: { $sum: "$materials.quantity" },
+            totalSum: {
+              $sum: {
+                $multiply: ["$materials.price", "$materials.quantity"],
+              },
+            },
+            lastDate: { $max: "$date" },
+            debtRemaining: { $last: "$debt.remainingAmount" },
+            debtStatus: { $last: "$debt.status" },
+          },
+        },
+
+        {
+          $project: {
+            _id: 0,
+            firmName: "$_id.firmName",
+            totalQuantity: 1,
+            totalSum: 1,
+            debtRemaining: 1,
+            debtStatus: 1,
+            lastDate: 1,
+          },
+        },
+
+        { $sort: { lastDate: -1 } },
+      ]);
+
+      return response.success(res, "Kirimlar ro'yxati", data);
+
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
   async createFirm(req, res) {
     try {
       const existingFirm = await Firm.findOne({ name: req.body.name });

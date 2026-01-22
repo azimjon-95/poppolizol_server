@@ -59,6 +59,7 @@ router.put(
 router.delete("/material/delete/:id", materialController.delete);
 
 router.post("/material/incomes", materialService.handleNewIncome);
+router.get("/material_routes/:materialName", materialService.getMaterialsRoutes);
 router.post("/material/firms", materialService.createFirm);
 router.get("/material/firms", materialService.getFirms);
 router.get("/material/getincomes", materialService.getIncomes);
